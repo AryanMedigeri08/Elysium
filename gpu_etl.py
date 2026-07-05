@@ -82,7 +82,7 @@ ORDER BY account_id, timestamp
 """
 
 t0 = time.time()
-df = bq_client.query(query).to_dataframe()
+df = bq_client.query(query).to_dataframe(bool_dtype=None, int_dtype=None, float_dtype=None)
 t_load = time.time() - t0
 
 print(f"✅ Loaded {len(df):,} rows in {t_load:.2f}s")
