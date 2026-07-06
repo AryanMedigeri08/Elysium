@@ -27,8 +27,8 @@ except Exception:
 PROJECT_ID = default_project or "elysium-501518"
 LOCATION = "us-central1"
 
-FLASH_MODEL = "gemini-1.5-flash"
-PRO_MODEL = "gemini-1.5-pro"
+FLASH_MODEL = "gemini-2.5-flash"
+PRO_MODEL = "gemini-2.5-pro"
 
 # ──────────────────────────────────────────────
 # VERIFY GCP PROJECT
