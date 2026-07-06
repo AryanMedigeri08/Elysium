@@ -1,6 +1,8 @@
 import os
 import sys
 import re
+import traceback
+import threading
 import pandas as pd
 import numpy as np
 import networkx as nx
@@ -49,6 +51,102 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ──────────────────────────────────────────────
+# STARTUP: PRE-WARM ALL BIGQUERY CACHES
+# ──────────────────────────────────────────────
+@app.on_event("startup")
+def prewarm_caches():
+    """Pre-warm all BigQuery caches in a background thread so the first
+    page load is instant and does not saturate the server threadpool."""
+    if not bq_client:
+        print("[INFO] No BigQuery client — skipping cache pre-warm.")
+        return
+
+    def _warm():
+        global _metrics_cache, _risk_by_channel_cache, _temporal_risk_cache
+        global _geographical_risk_cache, _risk_distribution_cache
+        global _critical_events_cache, _graph_raw_cache
+
+        queries = {
+            "_metrics_cache": f"""
+                SELECT COUNT(*) as total_transactions,
+                       SUM(CASE WHEN fraud_flag = 1 THEN 1 ELSE 0 END) as fraud_count,
+                       AVG(risk_score) as avg_risk_score,
+                       SUM(CASE WHEN risk_score >= 0.6 THEN 1 ELSE 0 END) as high_risk_count
+                FROM `{PROJECT_ID}.elysium.transactions_enriched`
+            """,
+            "_risk_by_channel_cache": f"""
+                SELECT transaction_type, COUNT(*) as transaction_count,
+                       ROUND(AVG(risk_score), 4) as avg_risk_score
+                FROM `{PROJECT_ID}.elysium.transactions_enriched`
+                GROUP BY transaction_type ORDER BY transaction_count DESC
+            """,
+            "_temporal_risk_cache": f"""
+                SELECT FORMAT_TIMESTAMP('%Y-%m', timestamp) as month,
+                       COUNT(*) as transaction_count, ROUND(AVG(risk_score), 4) as avg_risk_score
+                FROM `{PROJECT_ID}.elysium.transactions_enriched`
+                GROUP BY month ORDER BY month ASC
+            """,
+            "_geographical_risk_cache": f"""
+                SELECT country, COUNT(*) as transaction_count,
+                       ROUND(AVG(risk_score), 4) as avg_risk_score,
+                       SUM(CASE WHEN risk_score >= 0.6 THEN 1 ELSE 0 END) as high_risk_count
+                FROM `{PROJECT_ID}.elysium.transactions_enriched`
+                GROUP BY country ORDER BY avg_risk_score DESC
+            """,
+            "_risk_distribution_cache": f"""
+                SELECT CASE
+                    WHEN risk_score = 0 THEN '0.00 (No Risk)'
+                    WHEN risk_score > 0 AND risk_score <= 0.25 THEN '0.01\u20130.25 (Low)'
+                    WHEN risk_score > 0.25 AND risk_score <= 0.50 THEN '0.26\u20130.50 (Medium)'
+                    WHEN risk_score > 0.50 AND risk_score <= 0.75 THEN '0.51\u20130.75 (High)'
+                    ELSE '0.76\u20131.00 (Critical)'
+                END AS risk_bucket, COUNT(*) AS transaction_count
+                FROM `{PROJECT_ID}.elysium.transactions_enriched`
+                GROUP BY risk_bucket ORDER BY risk_bucket
+            """,
+            "_critical_events_cache": f"""
+                SELECT transaction_id, timestamp, account_id, customer_id,
+                       amount, transaction_type, merchant_category, country,
+                       fraud_flag, volatility_index, risk_score
+                FROM `{PROJECT_ID}.elysium.transactions_enriched`
+                ORDER BY risk_score DESC, amount DESC LIMIT 10
+            """,
+            "_graph_raw_cache": f"""
+                SELECT transaction_id, timestamp, account_id, customer_id,
+                       amount, transaction_type, country, risk_score
+                FROM `{PROJECT_ID}.elysium.transactions_enriched`
+                WHERE risk_score >= 0.2 ORDER BY risk_score DESC LIMIT 300
+            """,
+        }
+
+        for cache_name, query in queries.items():
+            try:
+                df = bq_client.query(query).to_dataframe()
+                if cache_name == "_metrics_cache":
+                    _metrics_cache = {
+                        "total_transactions": int(df['total_transactions'].iloc[0]),
+                        "fraud_count": int(df['fraud_count'].iloc[0] or 0),
+                        "avg_risk_score": float(df['avg_risk_score'].iloc[0] or 0),
+                        "high_risk_count": int(df['high_risk_count'].iloc[0] or 0)
+                    }
+                elif cache_name == "_critical_events_cache":
+                    df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                    _critical_events_cache = df.to_dict(orient="records")
+                elif cache_name == "_graph_raw_cache":
+                    _graph_raw_cache = df
+                else:
+                    globals()[cache_name] = df.to_dict(orient="records")
+                print(f"[STARTUP] Pre-warmed {cache_name} OK")
+            except Exception as e:
+                print(f"[STARTUP] Failed to pre-warm {cache_name}: {e}")
+
+    thread = threading.Thread(target=_warm, daemon=True)
+    thread.start()
+    print("[INFO] Cache pre-warm started in background thread.")
+
 
 # ──────────────────────────────────────────────
 # MOCK DATA GENERATORS (FALLBACK)
@@ -297,7 +395,6 @@ def get_metrics():
         }
         return _metrics_cache
     except Exception as e:
-        import traceback
         print(f"[ERROR] /api/metrics failed: {e}")
         traceback.print_exc()
         return generate_mock_summary()
@@ -324,7 +421,6 @@ def get_risk_by_channel():
         _risk_by_channel_cache = df.to_dict(orient="records")
         return _risk_by_channel_cache
     except Exception as e:
-        import traceback
         print(f"[ERROR] /api/risk-by-channel failed: {e}")
         traceback.print_exc()
         return generate_mock_transaction_types()
@@ -351,7 +447,6 @@ def get_temporal_risk():
         _temporal_risk_cache = df.to_dict(orient="records")
         return _temporal_risk_cache
     except Exception as e:
-        import traceback
         print(f"[ERROR] /api/temporal-risk failed: {e}")
         traceback.print_exc()
         return generate_mock_temporal_trend()
@@ -379,7 +474,6 @@ def get_geographical_risk():
         _geographical_risk_cache = df.to_dict(orient="records")
         return _geographical_risk_cache
     except Exception as e:
-        import traceback
         print(f"[ERROR] /api/geographical-risk failed: {e}")
         traceback.print_exc()
         return generate_mock_country_risk()
@@ -411,7 +505,6 @@ def get_risk_distribution():
         _risk_distribution_cache = df.to_dict(orient="records")
         return _risk_distribution_cache
     except Exception as e:
-        import traceback
         print(f"[ERROR] /api/risk-distribution failed: {e}")
         traceback.print_exc()
         return generate_mock_risk_distribution()
@@ -448,7 +541,6 @@ def get_critical_events():
         _critical_events_cache = df.to_dict(orient="records")
         return _critical_events_cache
     except Exception as e:
-        import traceback
         print(f"[ERROR] /api/critical-events failed: {e}")
         traceback.print_exc()
         return generate_mock_top_transactions()
@@ -486,7 +578,6 @@ def get_network_graph(
                 df_graph_raw = bq_client.query(query).to_dataframe()
                 _graph_raw_cache = df_graph_raw
             except Exception as e:
-                import traceback
                 print(f"[ERROR] /api/network-graph query failed: {e}")
                 traceback.print_exc()
                 df_graph_raw = generate_mock_graph_data()
@@ -646,15 +737,12 @@ def post_copilot(req: CopilotRequest):
         answer, model_used = ask_elysium(req.query)
         return {"answer": answer, "model": model_used}
     except Exception as err:
-        err_str = str(err)
         print(f"[ERROR] post_copilot failed: {err}")
-        if "credentials" in err_str.lower() or "auth" in err_str.lower() or "not found" in err_str.lower():
-            return {
-                "answer": get_mock_ai_response(req.query),
-                "model": "Simulated Copilot (Local Mock)"
-            }
-        else:
-            raise HTTPException(status_code=500, detail=f"AI model router error: {err_str}")
+        traceback.print_exc()
+        return {
+            "answer": get_mock_ai_response(req.query),
+            "model": "Simulated Copilot (Local Mock)"
+        }
 
 
 # ──────────────────────────────────────────────

@@ -113,14 +113,32 @@ export default function App() {
     return base;
   })();
 
-  // Load dashboard data on mount
+  // Fetch helper with retry and exponential backoff
+  const fetchWithRetry = (url, setter, retries = 3, delay = 1000) => {
+    fetch(url)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(setter)
+      .catch(err => {
+        if (retries > 0) {
+          console.warn(`[Elysium] Retrying ${url} in ${delay}ms (${retries} left)...`);
+          setTimeout(() => fetchWithRetry(url, setter, retries - 1, delay * 2), delay);
+        } else {
+          console.error(`[Elysium] Failed to fetch ${url} after retries:`, err);
+        }
+      });
+  };
+
+  // Load dashboard data on mount (with retry)
   useEffect(() => {
-    fetch(`${API_BASE}/api/metrics`).then(r => r.json()).then(setMetrics).catch(console.error);
-    fetch(`${API_BASE}/api/risk-by-channel`).then(r => r.json()).then(setRiskByChannel).catch(console.error);
-    fetch(`${API_BASE}/api/temporal-risk`).then(r => r.json()).then(setTemporalRisk).catch(console.error);
-    fetch(`${API_BASE}/api/geographical-risk`).then(r => r.json()).then(setGeographicalRisk).catch(console.error);
-    fetch(`${API_BASE}/api/risk-distribution`).then(r => r.json()).then(setRiskDistribution).catch(console.error);
-    fetch(`${API_BASE}/api/critical-events`).then(r => r.json()).then(setCriticalEvents).catch(console.error);
+    fetchWithRetry(`${API_BASE}/api/metrics`, setMetrics);
+    fetchWithRetry(`${API_BASE}/api/risk-by-channel`, setRiskByChannel);
+    fetchWithRetry(`${API_BASE}/api/temporal-risk`, setTemporalRisk);
+    fetchWithRetry(`${API_BASE}/api/geographical-risk`, setGeographicalRisk);
+    fetchWithRetry(`${API_BASE}/api/risk-distribution`, setRiskDistribution);
+    fetchWithRetry(`${API_BASE}/api/critical-events`, setCriticalEvents);
   }, []);
 
   // Leaflet map initialization hook

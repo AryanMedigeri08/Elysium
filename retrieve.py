@@ -35,14 +35,17 @@ BQ_EMBEDDINGS_TABLE = f"{PROJECT_ID}.{BQ_RAG_DATASET}.embeddings"
 EMBEDDING_MODEL = f"{PROJECT_ID}.{BQ_RAG_DATASET}.embedding_model"
 
 # ──────────────────────────────────────────────
-# VERIFY GCP PROJECT
+# LAZY BIGQUERY CLIENT INITIALIZATION
 # ──────────────────────────────────────────────
-print("=" * 60)
-_, _project_id = google.auth.default()
-print(f"   Active project: {_project_id}")
-print("=" * 60)
+_bq_client = None
 
-bq_client = bigquery.Client(project=PROJECT_ID)
+
+def _get_bq_client():
+    """Initialize the BigQuery client on first use instead of at import time."""
+    global _bq_client
+    if _bq_client is None:
+        _bq_client = bigquery.Client(project=PROJECT_ID)
+    return _bq_client
 
 
 def retrieve_context(query: str, top_k: int = 5) -> tuple[str, list[str]]:
@@ -58,6 +61,7 @@ def retrieve_context(query: str, top_k: int = 5) -> tuple[str, list[str]]:
         - context_text: Concatenated content from the top_k most similar chunks.
         - source_files: List of source filenames that contributed to the context.
     """
+    client = _get_bq_client()
 
     # Use VECTOR_SEARCH to find the most similar chunks
     # The query is embedded on-the-fly using the same embedding model
@@ -91,7 +95,7 @@ def retrieve_context(query: str, top_k: int = 5) -> tuple[str, list[str]]:
         ]
     )
 
-    results = bq_client.query(search_sql, job_config=job_config).to_dataframe()
+    results = client.query(search_sql, job_config=job_config).to_dataframe()
 
     if results.empty:
         return "No relevant context found in the knowledge base.", []
@@ -146,4 +150,4 @@ if __name__ == "__main__":
         print(f"\n... [truncated]")
     print("-" * 40)
 
-    print("\n🎉 PHASE 3c COMPLETE — Retrieval function verified!")
+    print("\nPHASE 3c COMPLETE — Retrieval function verified!")

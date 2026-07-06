@@ -15,7 +15,6 @@ GCP Config:
 import re
 import google.auth
 from google.cloud import aiplatform
-from vertexai.generative_models import GenerativeModel
 
 # ──────────────────────────────────────────────
 # CONFIG / GCP PROJECT RESOLUTION
@@ -31,17 +30,21 @@ FLASH_MODEL = "gemini-2.5-flash"
 PRO_MODEL = "gemini-2.5-pro"
 
 # ──────────────────────────────────────────────
-# VERIFY GCP PROJECT
+# LAZY VERTEX AI INITIALIZATION
 # ──────────────────────────────────────────────
-print("=" * 60)
-_, _project_id = google.auth.default()
-print(f"   Active project: {_project_id}")
-print("=" * 60)
+_vertexai_initialized = False
 
-# Initialize Vertex AI (uses application default credentials)
-import vertexai
-vertexai.init(project=PROJECT_ID, location=LOCATION)
-aiplatform.init(project=PROJECT_ID, location=LOCATION)
+
+def _ensure_vertexai():
+    """Initialize Vertex AI on first use instead of at import time."""
+    global _vertexai_initialized
+    if _vertexai_initialized:
+        return
+    import vertexai
+    vertexai.init(project=PROJECT_ID, location=LOCATION)
+    aiplatform.init(project=PROJECT_ID, location=LOCATION)
+    _vertexai_initialized = True
+
 
 # Flash keywords — queries containing these route to the fast model
 FLASH_KEYWORDS = [
@@ -108,6 +111,9 @@ def ask_elysium(query: str) -> tuple[str, str]:
     Returns:
         A tuple of (answer_text, model_used).
     """
+    _ensure_vertexai()
+    from vertexai.generative_models import GenerativeModel
+
     model_class = classify_query(query)
 
     if model_class == "pro":
@@ -162,7 +168,7 @@ if __name__ == "__main__":
 
     # Test 1: Should route to FLASH
     query_flash = "What is the current risk score summary for high-risk accounts?"
-    print(f"\n📝 Test 1 (expected: Flash)")
+    print(f"\nTest 1 (expected: Flash)")
     print(f"   Query: \"{query_flash}\"")
     print(f"   Classification: {classify_query(query_flash)}")
 
@@ -171,11 +177,11 @@ if __name__ == "__main__":
         print(f"   Model used: {model1}")
         print(f"   Answer preview: {answer1[:300]}...")
     except Exception as e:
-        print(f"   ⚠️  Error: {e}")
+        print(f"   Error: {e}")
 
     # Test 2: Should route to PRO
     query_pro = "Explain the fraud detection patterns for international wire transfers and how they relate to our country risk framework."
-    print(f"\n📝 Test 2 (expected: Pro)")
+    print(f"\nTest 2 (expected: Pro)")
     print(f"   Query: \"{query_pro}\"")
     print(f"   Classification: {classify_query(query_pro)}")
 
@@ -184,6 +190,6 @@ if __name__ == "__main__":
         print(f"   Model used: {model2}")
         print(f"   Answer preview: {answer2[:300]}...")
     except Exception as e:
-        print(f"   ⚠️  Error: {e}")
+        print(f"   Error: {e}")
 
-    print(f"\n🎉 PHASE 3d COMPLETE — Model router verified!")
+    print(f"\nPHASE 3d COMPLETE — Model router verified!")
