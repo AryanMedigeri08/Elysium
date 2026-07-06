@@ -72,6 +72,48 @@ export default function App() {
   const [inputText, setInputText] = useState('');
   const [copilotLoading, setCopilotLoading] = useState(false);
 
+  // Simulation tick for "dancing" graph animations
+  const [simulationTick, setSimulationTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSimulationTick(t => t + 1);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Dropdown filter states
+  const [timeRange, setTimeRange] = useState('7d');
+  const [temporalTimeRange, setTemporalTimeRange] = useState('12m');
+  const [heatmapMetric, setHeatmapMetric] = useState('risk');
+  const [companiesTimeRange, setCompaniesTimeRange] = useState('12m');
+
+  // Compute dynamic header metrics based on selected date filter
+  const activeMetrics = (() => {
+    const base = metrics.total_transactions > 0 ? metrics : {
+      total_transactions: 14284,
+      fraud_count: 342,
+      avg_risk_score: 0.28,
+      high_risk_count: 1208
+    };
+    if (timeRange === '30d') {
+      return {
+        total_transactions: base.total_transactions * 4.3,
+        fraud_count: base.fraud_count * 4.1,
+        avg_risk_score: base.avg_risk_score * 1.1,
+        high_risk_count: base.high_risk_count * 4.2
+      };
+    }
+    if (timeRange === '1y') {
+      return {
+        total_transactions: base.total_transactions * 50.7,
+        fraud_count: base.fraud_count * 46.5,
+        avg_risk_score: base.avg_risk_score * 1.21,
+        high_risk_count: base.high_risk_count * 51.6
+      };
+    }
+    return base;
+  })();
+
   // Load dashboard data on mount
   useEffect(() => {
     fetch(`${API_BASE}/api/metrics`).then(r => r.json()).then(setMetrics).catch(console.error);
@@ -92,10 +134,24 @@ export default function App() {
       return;
     }
 
-    const timer = setTimeout(() => {
+    if (leafletInstance.current) {
+      leafletInstance.current.remove();
+      leafletInstance.current = null;
+    }
+
+    let retries = 0;
+    let timer;
+
+    const initMap = () => {
       const mapContainer = document.getElementById('leaflet-risk-map');
-      if (!mapContainer) return;
-      if (leafletInstance.current) return;
+      if (!mapContainer) {
+        if (retries < 15) {
+          retries++;
+          timer = setTimeout(initMap, 100);
+        }
+        return;
+      }
+
       if (!window.L) {
         console.error("Leaflet not loaded");
         return;
@@ -137,6 +193,28 @@ export default function App() {
         'United Arab Emirates': 0.84
       };
 
+      const fallbackTxCount = {
+        'United States': 1420,
+        'United States of America': 1420,
+        'Canada': 450,
+        'Mexico': 230,
+        'Brazil': 350,
+        'United Kingdom': 890,
+        'Germany': 950,
+        'Russia': 410,
+        'Nigeria': 280,
+        'Iran': 120,
+        'China': 1800,
+        'India': 1500,
+        'Myanmar': 95,
+        'Japan': 620,
+        'Australia': 310,
+        'South Africa': 240,
+        'Singapore': 530,
+        'Saudi Arabia': 180,
+        'United Arab Emirates': 340
+      };
+
       const getCountryColor = (score) => {
         if (score === undefined || score === null) return 'rgba(239, 68, 68, 0.04)';
         if (score < 0.2) return 'rgba(239, 68, 68, 0.04)';
@@ -144,6 +222,16 @@ export default function App() {
         const r = Math.round(254 - (254 - 239) * ratio);
         const g = Math.round(226 - (226 - 68) * ratio);
         const b = Math.round(226 - (226 - 68) * ratio);
+        return `rgb(${r}, ${g}, ${b})`;
+      };
+
+      const getTxCountColor = (count) => {
+        if (count === undefined || count === null) return 'rgba(59, 130, 246, 0.04)';
+        if (count < 100) return 'rgba(59, 130, 246, 0.04)';
+        const ratio = Math.min(1, count / 2000);
+        const r = Math.round(239 - (239 - 30) * ratio);
+        const g = Math.round(246 - (246 - 41) * ratio);
+        const b = Math.round(255 - (255 - 59) * ratio);
         return `rgb(${r}, ${g}, ${b})`;
       };
 
@@ -155,21 +243,34 @@ export default function App() {
             style: (feature) => {
               const name = feature.properties.name || feature.properties.name_long || '';
               const match = geographicalRisk.find(r => r.country.toLowerCase() === name.toLowerCase());
-              const score = match ? match.avg_risk_score : (fallbackRisk[name] || 0.15);
-              return {
-                fillColor: getCountryColor(score),
-                weight: 1.2,
-                opacity: 1,
-                color: '#ffffff',
-                fillOpacity: 0.8
-              };
+              
+              if (heatmapMetric === 'risk') {
+                const score = match ? match.avg_risk_score : (fallbackRisk[name] || 0.15);
+                return {
+                  fillColor: getCountryColor(score),
+                  weight: 1.2,
+                  opacity: 1,
+                  color: '#ffffff',
+                  fillOpacity: 0.8
+                };
+              } else {
+                const count = match ? match.transaction_count : (fallbackTxCount[name] || 150);
+                return {
+                  fillColor: getTxCountColor(count),
+                  weight: 1.2,
+                  opacity: 1,
+                  color: '#ffffff',
+                  fillOpacity: 0.8
+                };
+              }
             },
             onEachFeature: (feature, layer) => {
               const name = feature.properties.name || feature.properties.name_long || '';
               const match = geographicalRisk.find(r => r.country.toLowerCase() === name.toLowerCase());
               const score = match ? match.avg_risk_score : (fallbackRisk[name] || 0.15);
+              const count = match ? match.transaction_count : (fallbackTxCount[name] || 150);
 
-              layer.bindTooltip(`
+              const tooltipHtml = heatmapMetric === 'risk' ? `
                 <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.8rem; line-height: 1.4;">
                   <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #0f172a;">
                     <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #ef4444; margin-right: 4px;"></span>
@@ -179,7 +280,19 @@ export default function App() {
                     Risk Score <span style="font-weight: 700; color: #ef4444;">${score.toFixed(2)}</span>
                   </div>
                 </div>
-              `, {
+              ` : `
+                <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.8rem; line-height: 1.4;">
+                  <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #0f172a;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #3b82f6; margin-right: 4px;"></span>
+                    ${name}
+                  </div>
+                  <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">
+                    Transactions <span style="font-weight: 700; color: #3b82f6;">${count.toLocaleString()}</span>
+                  </div>
+                </div>
+              `;
+
+              layer.bindTooltip(tooltipHtml, {
                 direction: 'top',
                 sticky: true,
                 className: 'leaflet-tooltip-premium'
@@ -190,7 +303,7 @@ export default function App() {
                   const l = e.target;
                   l.setStyle({
                     weight: 2,
-                    color: '#7c3aed',
+                    color: heatmapMetric === 'risk' ? '#7c3aed' : '#3b82f6',
                     fillOpacity: 0.9
                   });
                   l.bringToFront();
@@ -206,13 +319,25 @@ export default function App() {
               });
             }
           }).addTo(map);
+
+          // Force invalidate size to handle dynamic flexbox rendering
+          map.invalidateSize();
+          setTimeout(() => {
+            map.invalidateSize();
+          }, 150);
         });
-    }, 100);
+    };
+
+    initMap();
 
     return () => {
       clearTimeout(timer);
+      if (leafletInstance.current) {
+        leafletInstance.current.remove();
+        leafletInstance.current = null;
+      }
     };
-  }, [activeTab, geographicalRisk]);
+  }, [activeTab, geographicalRisk, heatmapMetric]);
 
   // Fetch and draw graph when controls change
   useEffect(() => {
@@ -481,11 +606,20 @@ export default function App() {
             <p className="page-subtitle">GPU-Accelerated Transaction Risk Scoring & Knowledge-Grounded Decision Engine</p>
           </header>
           <div className="header-controls">
-            <button className="date-picker-btn">
-              <Calendar size={15} />
-              <span>May 30 – Jun 05, 2025</span>
-              <ChevronDown size={14} />
-            </button>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Calendar size={15} style={{ position: 'absolute', left: '12px', pointerEvents: 'none', color: 'var(--text-secondary)' }} />
+              <select 
+                className="date-picker-btn" 
+                value={timeRange} 
+                onChange={(e) => setTimeRange(e.target.value)}
+                style={{ paddingLeft: '36px', appearance: 'none', cursor: 'pointer', height: '38px' }}
+              >
+                <option value="7d">May 30 – Jun 05, 2025 (7 Days)</option>
+                <option value="30d">May 06 – Jun 05, 2025 (30 Days)</option>
+                <option value="1y">Jan 01 – Dec 31, 2025 (1 Year)</option>
+              </select>
+              <ChevronDown size={14} style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: 'var(--text-secondary)' }} />
+            </div>
             <button className="bell-icon-btn">
               <Bell size={16} />
             </button>
@@ -501,7 +635,7 @@ export default function App() {
                 <Activity size={18} />
               </div>
             </div>
-            <div className="metric-value">500,000</div>
+            <div className="metric-value">{activeMetrics.total_transactions.toLocaleString()}</div>
             <div className="metric-trend trend-up">
               <span>▲ 12.4%</span>
               <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>vs last month</span>
@@ -549,7 +683,7 @@ export default function App() {
                 </svg>
               </div>
             </div>
-            <div className="metric-value">7,500</div>
+            <div className="metric-value">{activeMetrics.fraud_count.toLocaleString()}</div>
             <div className="metric-trend trend-down">
               <span>▼ 4.2%</span>
               <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>vs baseline</span>
@@ -593,7 +727,7 @@ export default function App() {
                 <Gauge size={18} />
               </div>
             </div>
-            <div className="metric-value">0.1842</div>
+            <div className="metric-value">{activeMetrics.avg_risk_score.toFixed(4)}</div>
             <div className="metric-trend trend-up" style={{ color: 'var(--color-success)' }}>
               <span>▼ 0.005</span>
               <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>global deviation</span>
@@ -637,7 +771,7 @@ export default function App() {
                 <Bell size={18} />
               </div>
             </div>
-            <div className="metric-value">12,450</div>
+            <div className="metric-value">{activeMetrics.high_risk_count.toLocaleString()}</div>
             <div className="metric-trend trend-down">
               <span>▼ 2.1%</span>
               <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>critical events</span>
@@ -691,10 +825,19 @@ export default function App() {
                       <p className="panel-subtitle">Transaction Volume (heights) against average risk scores (line) per month.</p>
                     </div>
                   </div>
-                  <button className="date-picker-btn" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-                    <span>Last 12 Months</span>
-                    <ChevronDown size={12} />
-                  </button>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <select 
+                      className="date-picker-btn" 
+                      value={temporalTimeRange} 
+                      onChange={(e) => setTemporalTimeRange(e.target.value)}
+                      style={{ padding: '6px 28px 6px 12px', fontSize: '0.8rem', appearance: 'none', cursor: 'pointer' }}
+                    >
+                      <option value="12m">Last 12 Months</option>
+                      <option value="6m">Last 6 Months</option>
+                      <option value="3m">Last 3 Months</option>
+                    </select>
+                    <ChevronDown size={12} style={{ position: 'absolute', right: '8px', pointerEvents: 'none', color: 'var(--text-secondary)' }} />
+                  </div>
                 </div>
 
                 {/* SVG Legend */}
@@ -714,23 +857,30 @@ export default function App() {
                 
                 <div className="chart-container-placeholder" style={{ border: 'none', background: 'transparent', display: 'block', height: '220px' }}>
                   {(() => {
-                    const temporalDataMock = [
-                      { month: '01', volume: 280000, risk: 0.22 },
-                      { month: '02', volume: 320000, risk: 0.26 },
-                      { month: '03', volume: 360000, risk: 0.28 },
-                      { month: '04', volume: 360000, risk: 0.27 },
-                      { month: '05', volume: 400000, risk: 0.31 },
-                      { month: '06', volume: 400000, risk: 0.30 },
-                      { month: '07', volume: 450000, risk: 0.34 },
-                      { month: '08', volume: 450000, risk: 0.35 },
-                      { month: '09', volume: 490000, risk: 0.38 },
-                      { month: '10', volume: 530000, risk: 0.39 },
-                      { month: '11', volume: 590000, risk: 0.44 },
-                      { month: '12', volume: 490000, risk: 0.38 }
+                    const fullData = [
+                      { month: 'Jan', volume: 280000 + Math.sin(simulationTick * 0.3 + 0) * 15000, risk: 0.22 + Math.sin(simulationTick * 0.4 + 0) * 0.02 },
+                      { month: 'Feb', volume: 320000 + Math.sin(simulationTick * 0.3 + 1) * 15000, risk: 0.26 + Math.sin(simulationTick * 0.4 + 1) * 0.02 },
+                      { month: 'Mar', volume: 360000 + Math.sin(simulationTick * 0.3 + 2) * 15000, risk: 0.28 + Math.sin(simulationTick * 0.4 + 2) * 0.02 },
+                      { month: 'Apr', volume: 360000 + Math.sin(simulationTick * 0.3 + 3) * 15000, risk: 0.27 + Math.sin(simulationTick * 0.4 + 3) * 0.02 },
+                      { month: 'May', volume: 400000 + Math.sin(simulationTick * 0.3 + 4) * 15000, risk: 0.31 + Math.sin(simulationTick * 0.4 + 4) * 0.02 },
+                      { month: 'Jun', volume: 400000 + Math.sin(simulationTick * 0.3 + 5) * 15000, risk: 0.30 + Math.sin(simulationTick * 0.4 + 5) * 0.02 },
+                      { month: 'Jul', volume: 450000 + Math.sin(simulationTick * 0.3 + 6) * 15000, risk: 0.34 + Math.sin(simulationTick * 0.4 + 6) * 0.02 },
+                      { month: 'Aug', volume: 450000 + Math.sin(simulationTick * 0.3 + 7) * 15000, risk: 0.35 + Math.sin(simulationTick * 0.4 + 7) * 0.02 },
+                      { month: 'Sep', volume: 490000 + Math.sin(simulationTick * 0.3 + 8) * 15000, risk: 0.38 + Math.sin(simulationTick * 0.4 + 8) * 0.02 },
+                      { month: 'Oct', volume: 530000 + Math.sin(simulationTick * 0.3 + 9) * 15000, risk: 0.39 + Math.sin(simulationTick * 0.4 + 9) * 0.02 },
+                      { month: 'Nov', volume: 590000 + Math.sin(simulationTick * 0.3 + 10) * 15000, risk: 0.44 + Math.sin(simulationTick * 0.4 + 10) * 0.02 },
+                      { month: 'Dec', volume: 490000 + Math.sin(simulationTick * 0.3 + 11) * 15000, risk: 0.38 + Math.sin(simulationTick * 0.4 + 11) * 0.02 }
                     ];
 
+                    const sliceSize = temporalTimeRange === '3m' ? 3 : temporalTimeRange === '6m' ? 6 : 12;
+                    const temporalDataMock = fullData.slice(-sliceSize);
+
                     const maxVol = 600000;
-                    const maxRisk = 0.40;
+                    const maxRisk = 0.50;
+
+                    const pointsCount = temporalDataMock.length;
+                    const spacing = 700 / (pointsCount - 1 || 1);
+                    const getX = (idx) => 50 + idx * spacing;
 
                     return (
                       <svg width="100%" height="220" viewBox="0 0 800 220" style={{ overflow: 'visible' }}>
@@ -746,10 +896,10 @@ export default function App() {
                         <text x="35" y="194" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="end">0</text>
 
                         {/* SVG Y-Axis Labels (Right - Risk Score) */}
-                        <text x="765" y="34" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.40</text>
-                        <text x="765" y="74" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.30</text>
-                        <text x="765" y="114" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.20</text>
-                        <text x="765" y="154" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.10</text>
+                        <text x="765" y="34" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.50</text>
+                        <text x="765" y="74" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.37</text>
+                        <text x="765" y="114" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.25</text>
+                        <text x="765" y="154" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.12</text>
                         <text x="765" y="194" fill="var(--text-muted)" fontSize="11" fontWeight="600" textAnchor="start">0.00</text>
 
                         {/* SVG grid lines */}
@@ -761,7 +911,7 @@ export default function App() {
                         
                         {/* Bars for Transaction Volume */}
                         {temporalDataMock.map((item, idx) => {
-                          const x = 70 + idx * 60;
+                          const x = getX(idx);
                           const height = (item.volume / maxVol) * 160;
                           return (
                             <g key={item.month}>
@@ -772,6 +922,7 @@ export default function App() {
                                 height={height} 
                                 fill="#c7d2fe"
                                 rx="4"
+                                style={{ transition: 'all 1.5s ease-in-out' }}
                               />
                               <text 
                                 x={x} 
@@ -787,42 +938,45 @@ export default function App() {
                           );
                         })}
 
-                        {/* Path for Average Risk Score */}
-                        {(() => {
-                          const points = temporalDataMock.map((item, idx) => {
-                            const x = 70 + idx * 60;
-                            const y = 190 - (item.risk / maxRisk) * 160;
-                            return `${x},${y}`;
-                          }).join(' ');
-                          
+                        {/* Path for Average Risk Score (Line Segments for smooth CSS transition) */}
+                        {temporalDataMock.slice(0, -1).map((item, idx) => {
+                          const nextItem = temporalDataMock[idx + 1];
+                          const x1 = getX(idx);
+                          const y1 = 190 - (item.risk / maxRisk) * 160;
+                          const x2 = getX(idx + 1);
+                          const y2 = 190 - (nextItem.risk / maxRisk) * 160;
                           return (
-                            <g>
-                              <polyline 
-                                fill="none" 
-                                stroke="#7c3aed" 
-                                strokeWidth="3" 
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                points={points} 
-                              />
-                              {temporalDataMock.map((item, idx) => {
-                                const x = 70 + idx * 60;
-                                const y = 190 - (item.risk / maxRisk) * 160;
-                                return (
-                                  <circle 
-                                    key={idx} 
-                                    cx={x} 
-                                    cy={y} 
-                                    r="4.5" 
-                                    fill="#ffffff" 
-                                    stroke="#7c3aed" 
-                                    strokeWidth="3"
-                                  />
-                                );
-                              })}
-                            </g>
+                            <line 
+                              key={idx}
+                              x1={x1} 
+                              y1={y1} 
+                              x2={x2} 
+                              y2={y2} 
+                              stroke="#7c3aed" 
+                              strokeWidth="3" 
+                              strokeLinecap="round"
+                              style={{ transition: 'all 1.5s ease-in-out' }}
+                            />
                           );
-                        })()}
+                        })}
+
+                        {/* Circle nodes for Risk Score */}
+                        {temporalDataMock.map((item, idx) => {
+                          const x = getX(idx);
+                          const y = 190 - (item.risk / maxRisk) * 160;
+                          return (
+                            <circle 
+                              key={idx} 
+                              cx={x} 
+                              cy={y} 
+                              r="4.5" 
+                              fill="#ffffff" 
+                              stroke="#7c3aed" 
+                              strokeWidth="3"
+                              style={{ transition: 'all 1.5s ease-in-out', cursor: 'pointer' }}
+                            />
+                          );
+                        })}
                       </svg>
                     );
                   })()}
@@ -876,13 +1030,13 @@ export default function App() {
                     <svg width="150" height="150" viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
                       <circle cx="50" cy="50" r="36" stroke="rgba(15,23,42,0.03)" strokeWidth="10" fill="none" />
                       {/* Segment 1: Lavender (Top Right) */}
-                      <circle cx="50" cy="50" r="36" stroke="#d8b4fe" strokeWidth="10" strokeDasharray="72 154" strokeDashoffset="0" fill="none" strokeLinecap="round" />
+                      <circle cx="50" cy="50" r="36" stroke="#d8b4fe" strokeWidth="10" strokeDasharray={`${72 + Math.sin(simulationTick * 0.4) * 4} ${154 - Math.sin(simulationTick * 0.4) * 4}`} strokeDashoffset="0" fill="none" strokeLinecap="round" style={{ transition: 'all 1.5s ease-in-out' }} />
                       {/* Segment 2: Blue (Bottom Right) */}
-                      <circle cx="50" cy="50" r="36" stroke="#3b82f6" strokeWidth="10" strokeDasharray="30 196" strokeDashoffset="-76" fill="none" strokeLinecap="round" />
+                      <circle cx="50" cy="50" r="36" stroke="#3b82f6" strokeWidth="10" strokeDasharray={`${30 + Math.sin(simulationTick * 0.4 + 1) * 2} ${196 - Math.sin(simulationTick * 0.4 + 1) * 2}`} strokeDashoffset="-76" fill="none" strokeLinecap="round" style={{ transition: 'all 1.5s ease-in-out' }} />
                       {/* Segment 3: Teal (Bottom Left) */}
-                      <circle cx="50" cy="50" r="36" stroke="#0d9488" strokeWidth="10" strokeDasharray="40 186" strokeDashoffset="-110" fill="none" strokeLinecap="round" />
+                      <circle cx="50" cy="50" r="36" stroke="#0d9488" strokeWidth="10" strokeDasharray={`${40 + Math.sin(simulationTick * 0.4 + 2) * 3} ${186 - Math.sin(simulationTick * 0.4 + 2) * 3}`} strokeDashoffset="-110" fill="none" strokeLinecap="round" style={{ transition: 'all 1.5s ease-in-out' }} />
                       {/* Segment 4: Violet (Top Left) */}
-                      <circle cx="50" cy="50" r="36" stroke="#a78bfa" strokeWidth="10" strokeDasharray="68 158" strokeDashoffset="-154" fill="none" strokeLinecap="round" />
+                      <circle cx="50" cy="50" r="36" stroke="#a78bfa" strokeWidth="10" strokeDasharray={`${68 + Math.sin(simulationTick * 0.4 + 3) * 4} ${158 - Math.sin(simulationTick * 0.4 + 3) * 4}`} strokeDashoffset="-154" fill="none" strokeLinecap="round" style={{ transition: 'all 1.5s ease-in-out' }} />
                     </svg>
                     <div className="donut-center-icon">
                       <svg width="42" height="42" viewBox="0 0 24 24" fill="none" style={{ filter: 'drop-shadow(0 4px 6px rgba(124, 58, 237, 0.15))' }}>
@@ -901,30 +1055,38 @@ export default function App() {
                   </div>
 
                   <div className="channel-list">
-                    {[
-                      { transaction_type: 'Card Purchase', avg_risk_score: 0.080, color: '#8b5cf6', widthPercent: 20 },
-                      { transaction_type: 'Transfer', avg_risk_score: 0.150, color: '#8b5cf6', widthPercent: 45 },
-                      { transaction_type: 'Wire', avg_risk_score: 0.320, color: '#3b82f6', widthPercent: 85 },
-                      { transaction_type: 'Loan Payment', avg_risk_score: 0.120, color: '#0d9488', widthPercent: 30 },
-                      { transaction_type: 'Investment', avg_risk_score: 0.220, color: '#6366f1', widthPercent: 65 }
-                    ].map((channel) => {
-                      return (
-                        <div key={channel.transaction_type} className="channel-row">
-                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', width: '100px' }}>
-                            {channel.transaction_type}
-                          </span>
-                          <div className="channel-progress-bar" style={{ height: '8px', background: '#f1f5f9', borderRadius: '4px' }}>
-                            <div 
-                              className="channel-progress-fill" 
-                              style={{ width: `${channel.widthPercent}%`, backgroundColor: channel.color, borderRadius: '4px', height: '100%' }}
-                            />
+                    {(() => {
+                      const channels = [
+                        { transaction_type: 'Card Purchase', avg_risk_score: 0.080, color: '#8b5cf6', widthPercent: 20 },
+                        { transaction_type: 'Transfer', avg_risk_score: 0.150, color: '#8b5cf6', widthPercent: 45 },
+                        { transaction_type: 'Wire', avg_risk_score: 0.320, color: '#3b82f6', widthPercent: 85 },
+                        { transaction_type: 'Loan Payment', avg_risk_score: 0.120, color: '#0d9488', widthPercent: 30 },
+                        { transaction_type: 'Investment', avg_risk_score: 0.220, color: '#6366f1', widthPercent: 65 }
+                      ];
+
+                      return channels.map((channel, idx) => {
+                        const wave = Math.sin(simulationTick * 0.45 + idx) * 0.015;
+                        const score = Math.max(0.01, channel.avg_risk_score + wave);
+                        const pct = Math.max(5, Math.min(99, channel.widthPercent + wave * 150));
+
+                        return (
+                          <div key={channel.transaction_type} className="channel-row">
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', width: '100px' }}>
+                              {channel.transaction_type}
+                            </span>
+                            <div className="channel-progress-bar" style={{ height: '8px', background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '4px', overflow: 'hidden', flexGrow: 1 }}>
+                              <div 
+                                className="channel-progress-fill" 
+                                style={{ width: `${pct}%`, backgroundColor: channel.color, borderRadius: '4px', height: '100%', transition: 'all 1.5s ease-in-out' }}
+                              />
+                            </div>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', minWidth: '40px', textAlign: 'right' }}>
+                              {score.toFixed(3)}
+                            </span>
                           </div>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', minWidth: '40px', textAlign: 'right' }}>
-                            {channel.avg_risk_score.toFixed(3)}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
 
@@ -1024,94 +1186,113 @@ export default function App() {
                       <h2 className="panel-title">Global Risk Heatmap</h2>
                       <p className="panel-subtitle">Risk intensity by country (higher intensity = higher risk)</p>
                     </div>
-                  </div>
-                  <button className="date-picker-btn" style={{ padding: '8px 16px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>Risk Score</span>
-                    <ChevronDown size={12} />
-                  </button>
-                </div>
-
-                {/* Map Container */}
-                <div style={{ position: 'relative', flexGrow: 1, overflow: 'hidden', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                  
-                  {/* Leaflet Map Div */}
-                  <div 
-                    id="leaflet-risk-map" 
-                    ref={leafletMapRef}
-                    style={{ width: '100%', height: '100%', minHeight: '320px', background: '#f8fafc', zIndex: 1 }}
-                  ></div>
-
-                  {/* Zoom Controls */}
-                  <div style={{
-                    position: 'absolute',
-                    left: '16px',
-                    top: '16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1px',
-                    background: '#ffffff',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    boxShadow: '0 4px 10px rgba(15, 23, 42, 0.05)',
-                    zIndex: 10
-                  }}>
-                    <button 
-                      onClick={() => { if (leafletInstance.current) leafletInstance.current.zoomIn(); }}
-                      style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-secondary)' }}
-                    >
-                      +
-                    </button>
-                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)' }}></div>
-                    <button 
-                      onClick={() => { if (leafletInstance.current) leafletInstance.current.zoomOut(); }}
-                      style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-secondary)' }}
-                    >
-                      -
-                    </button>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <select 
+                        className="date-picker-btn" 
+                        value={heatmapMetric} 
+                        onChange={(e) => setHeatmapMetric(e.target.value)}
+                        style={{ padding: '8px 28px 8px 16px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '24px', appearance: 'none', cursor: 'pointer' }}
+                      >
+                        <option value="risk">Risk Score</option>
+                        <option value="count">Transaction Count</option>
+                      </select>
+                      <ChevronDown size={12} style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: 'var(--text-secondary)' }} />
+                    </div>
                   </div>
 
-                  {/* Legend */}
-                  <div style={{
-                    position: 'absolute',
-                    left: '16px',
-                    bottom: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    color: 'var(--text-secondary)',
-                    zIndex: 10
-                  }}>
-                    <span>Low Risk</span>
+                  {/* Map Container */}
+                  <div style={{ position: 'relative', flexGrow: 1, overflow: 'hidden', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                    
+                    {/* Leaflet Map Div */}
+                    <div 
+                      id="leaflet-risk-map" 
+                      ref={leafletMapRef}
+                      style={{ width: '100%', height: '100%', minHeight: '320px', background: '#f8fafc', zIndex: 1 }}
+                    ></div>
+
+                    {/* Zoom Controls */}
                     <div style={{
-                      width: '120px',
-                      height: '8px',
-                      borderRadius: '4px',
-                      background: 'linear-gradient(to right, rgba(239, 68, 68, 0.04), rgb(239, 68, 68))',
-                      border: '1px solid var(--border-color)'
-                    }}></div>
-                    <span>High Risk</span>
+                      position: 'absolute',
+                      left: '16px',
+                      top: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1px',
+                      background: '#ffffff',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 10px rgba(15, 23, 42, 0.05)',
+                      zIndex: 10
+                    }}>
+                      <button 
+                        onClick={() => { if (leafletInstance.current) leafletInstance.current.zoomIn(); }}
+                        style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-secondary)' }}
+                      >
+                        +
+                      </button>
+                      <div style={{ height: '1px', backgroundColor: 'var(--border-color)' }}></div>
+                      <button 
+                        onClick={() => { if (leafletInstance.current) leafletInstance.current.zoomOut(); }}
+                        style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-secondary)' }}
+                      >
+                        -
+                      </button>
+                    </div>
+
+                    {/* Legend */}
+                    <div style={{
+                      position: 'absolute',
+                      left: '16px',
+                      bottom: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      color: 'var(--text-secondary)',
+                      zIndex: 10
+                    }}>
+                      <span>{heatmapMetric === 'risk' ? 'Low Risk' : 'Low Volume'}</span>
+                      <div style={{
+                        width: '120px',
+                        height: '8px',
+                        borderRadius: '4px',
+                        background: heatmapMetric === 'risk' 
+                          ? 'linear-gradient(to right, rgba(239, 68, 68, 0.04), rgb(239, 68, 68))'
+                          : 'linear-gradient(to right, rgba(59, 130, 246, 0.04), rgb(59, 130, 246))',
+                        border: '1px solid var(--border-color)'
+                      }}></div>
+                      <span>{heatmapMetric === 'risk' ? 'High Risk' : 'High Volume'}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-                {/* Risk by Top Companies line graph */}
-              <div className="glass-panel panel-container" style={{ display: 'flex', flexDirection: 'column', height: '420px', padding: '24px' }}>
-                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)' }}>
-                      <Building2 size={20} />
+                  {/* Risk by Top Companies line graph */}
+                <div className="glass-panel panel-container" style={{ display: 'flex', flexDirection: 'column', height: '420px', padding: '24px' }}>
+                  <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)' }}>
+                        <Building2 size={20} />
+                      </div>
+                      <div>
+                        <h2 className="panel-title">Risk by Top Companies</h2>
+                        <p className="panel-subtitle">Average risk score by top 10 companies</p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="panel-title">Risk by Top Companies</h2>
-                      <p className="panel-subtitle">Average risk score by top 10 companies</p>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <select 
+                        className="date-picker-btn" 
+                        value={companiesTimeRange} 
+                        onChange={(e) => setCompaniesTimeRange(e.target.value)}
+                        style={{ padding: '8px 28px 8px 16px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '24px', appearance: 'none', cursor: 'pointer' }}
+                      >
+                        <option value="12m">Last 12 Months</option>
+                        <option value="6m">Last 6 Months</option>
+                        <option value="30d">Last 30 Days</option>
+                      </select>
+                      <ChevronDown size={12} style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: 'var(--text-secondary)' }} />
                     </div>
                   </div>
-                  <button className="date-picker-btn" style={{ padding: '8px 16px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>Last 12 Months</span>
-                    <ChevronDown size={12} />
-                  </button>
                 </div>
 
                 {/* List Container */}
@@ -1130,11 +1311,18 @@ export default function App() {
                       { name: 'Credex Technologies', icon: <Gauge size={12} />, score: 0.28 }
                     ];
 
+                    const multiplier = companiesTimeRange === '30d' ? 0.65 : companiesTimeRange === '6m' ? 0.82 : 1.0;
+                    const simulatedCompanies = companies.map((c, idx) => {
+                      const wave = Math.sin(simulationTick * 0.4 + idx) * 0.015;
+                      const score = Math.max(0.1, Math.min(0.99, (c.score * multiplier) + wave));
+                      return { ...c, score };
+                    });
+
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
                         {/* Rows Wrapper */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                          {companies.map((company) => {
+                          {simulatedCompanies.map((company) => {
                             const widthPercent = company.score * 88;
                             return (
                               <div key={company.name} style={{ display: 'flex', alignItems: 'center', gap: '16px', height: '20px' }}>
@@ -1180,7 +1368,8 @@ export default function App() {
                                     height: '6px', 
                                     background: 'linear-gradient(90deg, #a78bfa, #7c3aed)', 
                                     borderRadius: '3px',
-                                    boxShadow: '0 1px 3px rgba(124, 58, 237, 0.15)'
+                                    boxShadow: '0 1px 3px rgba(124, 58, 237, 0.15)',
+                                    transition: 'all 1.5s ease-in-out'
                                   }}></div>
 
                                   {/* Label at the end of the bar */}
@@ -1189,7 +1378,8 @@ export default function App() {
                                     left: `calc(${widthPercent}% + 10px)`, 
                                     fontSize: '0.72rem', 
                                     fontWeight: 700, 
-                                    color: 'var(--text-secondary)'
+                                    color: 'var(--text-secondary)',
+                                    transition: 'all 1.5s ease-in-out'
                                   }}>
                                     {company.score.toFixed(2)}
                                   </div>

@@ -4,10 +4,10 @@
   --bg-card: rgba(255, 255, 255, 0.7);
   --bg-card-hover: rgba(255, 255, 255, 0.95);
   --border-color: rgba(226, 232, 240, 0.8);
-  --border-hover: rgba(99, 102, 241, 0.25);
+  --border-hover: rgba(168, 85, 247, 0.4);
   
   --color-primary: #4f46e5;
-  --color-secondary: #7c3aed;
+  --color-secondary: #a855f7;
   --color-accent: #0d9488;
   
   --color-success: #10b981;
@@ -81,7 +81,7 @@ h1, h2, h3, h4, h5, h6 {
 .glass-panel:hover {
   border-color: var(--border-hover);
   background: var(--bg-card-hover);
-  box-shadow: 0 20px 25px -5px rgba(148, 163, 184, 0.2), 0 10px 10px -5px rgba(148, 163, 184, 0.1);
+  box-shadow: 0 20px 25px -5px rgba(168, 85, 247, 0.12), 0 10px 10px -5px rgba(168, 85, 247, 0.05);
 }
 
 .glass-card-glow {
