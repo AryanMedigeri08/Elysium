@@ -13,6 +13,13 @@ GCP Config:
     BQ_TABLE    = "elysium.transactions_raw"
 """
 
+import sys
+import os
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
+
 import google.auth
 
 # ──────────────────────────────────────────────

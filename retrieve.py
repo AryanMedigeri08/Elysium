@@ -11,6 +11,13 @@ GCP Config:
     PROJECT_ID = "elysium-501518"
 """
 
+import sys
+import os
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
+
 import google.auth
 from google.cloud import bigquery
 

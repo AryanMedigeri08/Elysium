@@ -13,6 +13,13 @@ GCP Config:
     BUCKET      = "elysium-data"
 """
 
+import sys
+import os
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
+
 import re
 import time
 import google.auth
