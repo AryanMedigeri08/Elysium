@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import './App.css';
 
-const API_BASE = window.location.port === "5173" ? "http://localhost:8000" : "";
+const API_BASE = window.location.port === "5173" ? "http://127.0.0.1:8000" : "";
 const PROJECT_ID = "elysium-501518";
 
 export default function App() {

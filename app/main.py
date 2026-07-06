@@ -261,11 +261,22 @@ def generate_mock_graph_data():
     return pd.DataFrame(data)
 
 # ──────────────────────────────────────────────
-# ENDPOINTS
+# CACHE STORE FOR BIGQUERY QUERIES
 # ──────────────────────────────────────────────
+_metrics_cache = None
+_risk_by_channel_cache = None
+_temporal_risk_cache = None
+_geographical_risk_cache = None
+_risk_distribution_cache = None
+_critical_events_cache = None
+_graph_raw_cache = None
+
 
 @app.get("/api/metrics")
 def get_metrics():
+    global _metrics_cache
+    if _metrics_cache is not None:
+        return _metrics_cache
     if not bq_client:
         return generate_mock_summary()
     try:
@@ -278,12 +289,13 @@ def get_metrics():
         FROM `{PROJECT_ID}.elysium.transactions_enriched`
         """
         df = bq_client.query(query).to_dataframe()
-        return {
+        _metrics_cache = {
             "total_transactions": int(df['total_transactions'].iloc[0]),
             "fraud_count": int(df['fraud_count'].iloc[0] or 0),
             "avg_risk_score": float(df['avg_risk_score'].iloc[0] or 0),
             "high_risk_count": int(df['high_risk_count'].iloc[0] or 0)
         }
+        return _metrics_cache
     except Exception as e:
         import traceback
         print(f"[ERROR] /api/metrics failed: {e}")
@@ -293,6 +305,9 @@ def get_metrics():
 
 @app.get("/api/risk-by-channel")
 def get_risk_by_channel():
+    global _risk_by_channel_cache
+    if _risk_by_channel_cache is not None:
+        return _risk_by_channel_cache
     if not bq_client:
         return generate_mock_transaction_types()
     try:
@@ -306,7 +321,8 @@ def get_risk_by_channel():
         ORDER BY transaction_count DESC
         """
         df = bq_client.query(query).to_dataframe()
-        return df.to_dict(orient="records")
+        _risk_by_channel_cache = df.to_dict(orient="records")
+        return _risk_by_channel_cache
     except Exception as e:
         import traceback
         print(f"[ERROR] /api/risk-by-channel failed: {e}")
@@ -316,6 +332,9 @@ def get_risk_by_channel():
 
 @app.get("/api/temporal-risk")
 def get_temporal_risk():
+    global _temporal_risk_cache
+    if _temporal_risk_cache is not None:
+        return _temporal_risk_cache
     if not bq_client:
         return generate_mock_temporal_trend()
     try:
@@ -329,7 +348,8 @@ def get_temporal_risk():
         ORDER BY month ASC
         """
         df = bq_client.query(query).to_dataframe()
-        return df.to_dict(orient="records")
+        _temporal_risk_cache = df.to_dict(orient="records")
+        return _temporal_risk_cache
     except Exception as e:
         import traceback
         print(f"[ERROR] /api/temporal-risk failed: {e}")
@@ -339,6 +359,9 @@ def get_temporal_risk():
 
 @app.get("/api/geographical-risk")
 def get_geographical_risk():
+    global _geographical_risk_cache
+    if _geographical_risk_cache is not None:
+        return _geographical_risk_cache
     if not bq_client:
         return generate_mock_country_risk()
     try:
@@ -353,7 +376,8 @@ def get_geographical_risk():
         ORDER BY avg_risk_score DESC
         """
         df = bq_client.query(query).to_dataframe()
-        return df.to_dict(orient="records")
+        _geographical_risk_cache = df.to_dict(orient="records")
+        return _geographical_risk_cache
     except Exception as e:
         import traceback
         print(f"[ERROR] /api/geographical-risk failed: {e}")
@@ -363,6 +387,9 @@ def get_geographical_risk():
 
 @app.get("/api/risk-distribution")
 def get_risk_distribution():
+    global _risk_distribution_cache
+    if _risk_distribution_cache is not None:
+        return _risk_distribution_cache
     if not bq_client:
         return generate_mock_risk_distribution()
     try:
@@ -381,7 +408,8 @@ def get_risk_distribution():
         ORDER BY risk_bucket
         """
         df = bq_client.query(query).to_dataframe()
-        return df.to_dict(orient="records")
+        _risk_distribution_cache = df.to_dict(orient="records")
+        return _risk_distribution_cache
     except Exception as e:
         import traceback
         print(f"[ERROR] /api/risk-distribution failed: {e}")
@@ -391,6 +419,9 @@ def get_risk_distribution():
 
 @app.get("/api/critical-events")
 def get_critical_events():
+    global _critical_events_cache
+    if _critical_events_cache is not None:
+        return _critical_events_cache
     if not bq_client:
         return generate_mock_top_transactions()
     try:
@@ -414,7 +445,8 @@ def get_critical_events():
         df = bq_client.query(query).to_dataframe()
         # Convert Timestamp objects to string
         df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
-        return df.to_dict(orient="records")
+        _critical_events_cache = df.to_dict(orient="records")
+        return _critical_events_cache
     except Exception as e:
         import traceback
         print(f"[ERROR] /api/critical-events failed: {e}")
@@ -427,32 +459,37 @@ def get_network_graph(
     min_risk: float = Query(0.2, ge=0.0, le=1.0),
     max_edges: int = Query(150, ge=10, le=500)
 ):
+    global _graph_raw_cache
     # Load dataset
     if not bq_client:
         df_graph_raw = generate_mock_graph_data()
     else:
-        try:
-            query = f"""
-            SELECT
-                transaction_id,
-                timestamp,
-                account_id,
-                customer_id,
-                amount,
-                transaction_type,
-                country,
-                risk_score
-            FROM `{PROJECT_ID}.elysium.transactions_enriched`
-            WHERE risk_score >= 0.2
-            ORDER BY risk_score DESC
-            LIMIT 300
-            """
-            df_graph_raw = bq_client.query(query).to_dataframe()
-        except Exception as e:
-            import traceback
-            print(f"[ERROR] /api/network-graph query failed: {e}")
-            traceback.print_exc()
-            df_graph_raw = generate_mock_graph_data()
+        if _graph_raw_cache is not None:
+            df_graph_raw = _graph_raw_cache
+        else:
+            try:
+                query = f"""
+                SELECT
+                    transaction_id,
+                    timestamp,
+                    account_id,
+                    customer_id,
+                    amount,
+                    transaction_type,
+                    country,
+                    risk_score
+                FROM `{PROJECT_ID}.elysium.transactions_enriched`
+                WHERE risk_score >= 0.2
+                ORDER BY risk_score DESC
+                LIMIT 300
+                """
+                df_graph_raw = bq_client.query(query).to_dataframe()
+                _graph_raw_cache = df_graph_raw
+            except Exception as e:
+                import traceback
+                print(f"[ERROR] /api/network-graph query failed: {e}")
+                traceback.print_exc()
+                df_graph_raw = generate_mock_graph_data()
 
     # Filter dataset based on inputs
     df_filtered = df_graph_raw[df_graph_raw['risk_score'] >= min_risk].head(max_edges)
