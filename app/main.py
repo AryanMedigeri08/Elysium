@@ -284,7 +284,10 @@ def get_metrics():
             "avg_risk_score": float(df['avg_risk_score'].iloc[0] or 0),
             "high_risk_count": int(df['high_risk_count'].iloc[0] or 0)
         }
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] /api/metrics failed: {e}")
+        traceback.print_exc()
         return generate_mock_summary()
 
 
@@ -304,7 +307,10 @@ def get_risk_by_channel():
         """
         df = bq_client.query(query).to_dataframe()
         return df.to_dict(orient="records")
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] /api/risk-by-channel failed: {e}")
+        traceback.print_exc()
         return generate_mock_transaction_types()
 
 
@@ -324,7 +330,10 @@ def get_temporal_risk():
         """
         df = bq_client.query(query).to_dataframe()
         return df.to_dict(orient="records")
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] /api/temporal-risk failed: {e}")
+        traceback.print_exc()
         return generate_mock_temporal_trend()
 
 
@@ -345,7 +354,10 @@ def get_geographical_risk():
         """
         df = bq_client.query(query).to_dataframe()
         return df.to_dict(orient="records")
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] /api/geographical-risk failed: {e}")
+        traceback.print_exc()
         return generate_mock_country_risk()
 
 
@@ -370,7 +382,10 @@ def get_risk_distribution():
         """
         df = bq_client.query(query).to_dataframe()
         return df.to_dict(orient="records")
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] /api/risk-distribution failed: {e}")
+        traceback.print_exc()
         return generate_mock_risk_distribution()
 
 
@@ -400,7 +415,10 @@ def get_critical_events():
         # Convert Timestamp objects to string
         df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
         return df.to_dict(orient="records")
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] /api/critical-events failed: {e}")
+        traceback.print_exc()
         return generate_mock_top_transactions()
 
 
@@ -430,7 +448,10 @@ def get_network_graph(
             LIMIT 300
             """
             df_graph_raw = bq_client.query(query).to_dataframe()
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(f"[ERROR] /api/network-graph query failed: {e}")
+            traceback.print_exc()
             df_graph_raw = generate_mock_graph_data()
 
     # Filter dataset based on inputs
