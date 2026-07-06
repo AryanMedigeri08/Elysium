@@ -134,10 +134,24 @@ export default function App() {
       return;
     }
 
-    const timer = setTimeout(() => {
+    if (leafletInstance.current) {
+      leafletInstance.current.remove();
+      leafletInstance.current = null;
+    }
+
+    let retries = 0;
+    let timer;
+
+    const initMap = () => {
       const mapContainer = document.getElementById('leaflet-risk-map');
-      if (!mapContainer) return;
-      if (leafletInstance.current) return;
+      if (!mapContainer) {
+        if (retries < 15) {
+          retries++;
+          timer = setTimeout(initMap, 100);
+        }
+        return;
+      }
+
       if (!window.L) {
         console.error("Leaflet not loaded");
         return;
@@ -305,8 +319,16 @@ export default function App() {
               });
             }
           }).addTo(map);
+
+          // Force invalidate size to handle dynamic flexbox rendering
+          map.invalidateSize();
+          setTimeout(() => {
+            map.invalidateSize();
+          }, 150);
         });
-    }, 100);
+    };
+
+    initMap();
 
     return () => {
       clearTimeout(timer);
