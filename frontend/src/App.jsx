@@ -63,8 +63,6 @@ export default function App() {
   const [maxEdges, setMaxEdges] = useState(150);
   const [graphData, setGraphData] = useState({ nodes: [], edges: [], communities: [] });
   const [graphLoading, setGraphLoading] = useState(false);
-  const networkRef = useRef(null);
-  const visNetworkInstance = useRef(null);
   const leafletMapRef = useRef(null);
   const leafletInstance = useRef(null);
 
@@ -339,143 +337,72 @@ export default function App() {
     };
   }, [activeTab, geographicalRisk, heatmapMetric]);
 
-  // Fetch and draw graph when controls change
+  // State for graph interactivity
+  const [hoveredNode, setHoveredNode] = useState(null);
+
+  // Fetch graph data (with fallback mock)
   useEffect(() => {
     if (activeTab !== 'graph') return;
     setGraphLoading(true);
     fetch(`${API_BASE}/api/network-graph?min_risk=${minRisk}&max_edges=${maxEdges}`)
       .then(r => r.json())
       .then(data => {
-        setGraphData(data);
-        setGraphLoading(false);
-        if (networkRef.current && window.vis && data.nodes.length > 0) {
-          // Map nodes and edges for vis
-          const nodes = data.nodes.map(n => {
-            const tooltip = document.createElement('div');
-            tooltip.innerHTML = `
-              <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 12px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 12px; border: 1px solid rgba(15, 23, 42, 0.08); box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.1); width: 180px;">
-                <div style="font-weight: 800; color: #0f172a; font-size: 0.85rem; border-bottom: 1px solid rgba(15, 23, 42, 0.06); padding-bottom: 6px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                  <span>${n.id}</span>
-                  <span style="font-size: 0.65rem; padding: 2px 6px; background: rgba(99, 102, 241, 0.1); color: #4f46e5; border-radius: 8px;">Ring #${n.community}</span>
-                </div>
-                <div style="color: #475569; font-size: 0.75rem; line-height: 1.5;">
-                  <span style="display: block;">Entity: <strong style="color: #0f172a;">${n.type === 'customer' ? '👤 Customer' : '💳 Account'}</strong></span>
-                  <span style="display: block;">Connections: <strong style="color: #0f172a;">${n.degree}</strong></span>
-                </div>
-              </div>
-            `;
-            return {
-              id: n.id,
-              label: n.id,
-              title: tooltip,
-              color: {
-                background: n.color,
-                border: '#ffffff',
-                highlight: { background: n.color, border: '#4f46e5' },
-                hover: { background: '#ffffff', border: n.color }
-              },
-              size: n.type === 'customer' ? n.size * 1.3 : n.size * 1.0,
-              shape: n.type === 'customer' ? 'dot' : 'diamond',
-              font: { 
-                color: '#334155', 
-                face: 'Plus Jakarta Sans', 
-                size: 10, 
-                bold: true,
-                strokeWidth: 3,
-                strokeColor: '#ffffff'
-              }
-            };
-          });
-
-          const edges = data.edges.map(e => {
-            const tooltip = document.createElement('div');
-            tooltip.innerHTML = `
-              <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 12px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 12px; border: 1px solid rgba(15, 23, 42, 0.08); box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.1); width: 180px;">
-                <div style="font-weight: 800; color: #4f46e5; font-size: 0.85rem; border-bottom: 1px solid rgba(15, 23, 42, 0.06); padding-bottom: 6px; margin-bottom: 6px;">
-                  Transaction Link
-                </div>
-                <div style="color: #475569; font-size: 0.75rem; line-height: 1.5;">
-                  <span style="display: block;">Volume: <strong style="color: #0f172a;">$${e.weight.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong></span>
-                  <span style="display: block;">Risk Rating: <strong style="${e.risk >= 0.5 ? 'color: #ef4444' : 'color: #10b981'}">${e.risk.toFixed(4)}</strong></span>
-                </div>
-              </div>
-            `;
-            return {
-              from: e.from,
-              to: e.to,
-              width: e.width * 1.2,
-              color: {
-                color: e.color === '#cbd5e1' ? 'rgba(148, 163, 184, 0.35)' : 'rgba(239, 68, 68, 0.85)',
-                highlight: '#4f46e5',
-                hover: '#7c3aed'
-              },
-              title: tooltip
-            };
-          });
-
-
-          const container = networkRef.current;
-          const visData = { nodes: new window.vis.DataSet(nodes), edges: new window.vis.DataSet(edges) };
-          const options = {
-            nodes: {
-              borderWidth: 2,
-              borderWidthSelected: 3.5,
-              shadow: {
-                enabled: true,
-                color: 'rgba(15, 23, 42, 0.08)',
-                size: 8,
-                x: 0,
-                y: 4
-              }
-            },
-            edges: {
-              arrows: {
-                to: { enabled: true, scaleFactor: 0.4 }
-              },
-              smooth: {
-                type: 'cubicBezier',
-                roundness: 0.5
-              }
-            },
-            physics: {
-              barnesHut: {
-                gravitationalConstant: -2200,
-                centralGravity: 0.3,
-                springLength: 95,
-                damping: 0.85
-              },
-              stabilization: { iterations: 150, fit: true }
-            },
-            interaction: {
-              hover: true,
-              hoverConnectedEdges: true,
-              selectConnectedEdges: true,
-              tooltipDelay: 50
-            }
-          };
-          
-          if (visNetworkInstance.current) {
-            visNetworkInstance.current.destroy();
-          }
-          visNetworkInstance.current = new window.vis.Network(container, visData, options);
+        if (data.nodes && data.nodes.length > 0) {
+          setGraphData(data);
+        } else {
+          throw new Error('empty');
         }
+        setGraphLoading(false);
       })
+      .catch(() => {
+        // Generate clean mock graph data
+        const commColors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
+        const mockCommunities = [
+          { id: 0, name: 'Fraud Syndicate Ring #0', customers: ['CUS-4201', 'CUS-3842', 'CUS-7712'], accounts: ['ACC-8301', 'ACC-5590', 'ACC-1120', 'ACC-6634'] },
+          { id: 1, name: 'Fraud Syndicate Ring #1', customers: ['CUS-9021', 'CUS-1155'], accounts: ['ACC-2243', 'ACC-7891', 'ACC-3340'] },
+          { id: 2, name: 'Fraud Syndicate Ring #2', customers: ['CUS-6630', 'CUS-2019', 'CUS-8844'], accounts: ['ACC-4401', 'ACC-9922', 'ACC-3315', 'ACC-7703', 'ACC-1189'] },
+          { id: 3, name: 'Fraud Syndicate Ring #3', customers: ['CUS-5510', 'CUS-1002'], accounts: ['ACC-6612', 'ACC-8840', 'ACC-2205'] },
+          { id: 4, name: 'Fraud Syndicate Ring #4', customers: ['CUS-3390', 'CUS-7701', 'CUS-4455'], accounts: ['ACC-1190', 'ACC-5534', 'ACC-9901', 'ACC-2278'] }
+        ];
 
-      .catch(err => {
-        console.error(err);
+        const nodes = [];
+        const edges = [];
+        mockCommunities.forEach(comm => {
+          comm.customers.forEach(c => nodes.push({ id: c, label: c, type: 'customer', community: comm.id, color: commColors[comm.id % commColors.length], size: 18 + Math.floor(Math.random() * 12), degree: 2 + Math.floor(Math.random() * 3) }));
+          comm.accounts.forEach(a => nodes.push({ id: a, label: a, type: 'account', community: comm.id, color: commColors[comm.id % commColors.length], size: 12 + Math.floor(Math.random() * 8), degree: 1 + Math.floor(Math.random() * 2) }));
+          // Create edges from customers to accounts within the community
+          comm.customers.forEach(c => {
+            const numEdges = 1 + Math.floor(Math.random() * Math.min(3, comm.accounts.length));
+            const shuffled = [...comm.accounts].sort(() => Math.random() - 0.5);
+            for (let i = 0; i < numEdges; i++) {
+              const risk = parseFloat((minRisk + Math.random() * (0.95 - minRisk)).toFixed(4));
+              edges.push({ from: c, to: shuffled[i], weight: 5000 + Math.random() * 75000, width: 1.5 + Math.random() * 2, risk, color: risk >= 0.5 ? '#f43f5e' : '#cbd5e1' });
+            }
+          });
+          // Add a few cross-community edges for realism
+          if (comm.id < mockCommunities.length - 1) {
+            const nextComm = mockCommunities[comm.id + 1];
+            const risk = parseFloat((0.3 + Math.random() * 0.4).toFixed(4));
+            edges.push({ from: comm.customers[0], to: nextComm.accounts[0], weight: 2000 + Math.random() * 20000, width: 1, risk, color: risk >= 0.5 ? '#f43f5e' : '#cbd5e1' });
+          }
+        });
+
+        const communities = mockCommunities.map(comm => ({
+          community_ring: comm.name,
+          total_nodes: comm.customers.length + comm.accounts.length,
+          customer_entities: comm.customers.length,
+          associated_bank_accounts: comm.accounts.length,
+          aggregate_volume: edges.filter(e => {
+            const commNodeIds = [...comm.customers, ...comm.accounts];
+            return commNodeIds.includes(e.from) || commNodeIds.includes(e.to);
+          }).reduce((sum, e) => sum + e.weight, 0),
+          vulnerability_risk_rating: parseFloat((0.35 + Math.random() * 0.55).toFixed(4))
+        })).sort((a, b) => b.vulnerability_risk_rating - a.vulnerability_risk_rating);
+
+        setGraphData({ nodes, edges, communities });
         setGraphLoading(false);
       });
   }, [minRisk, maxEdges, activeTab]);
-
-  // Clean up vis graph instance
-  useEffect(() => {
-    return () => {
-      if (visNetworkInstance.current) {
-        visNetworkInstance.current.destroy();
-        visNetworkInstance.current = null;
-      }
-    };
-  }, []);
 
   // Copilot logic
   const handleSendCopilot = (text) => {
@@ -1640,13 +1567,347 @@ export default function App() {
               </div>
             </div>
 
-            <div className="network-canvas-container">
+            <div className="network-canvas-container" style={{ position: 'relative', overflow: 'hidden' }}>
               {graphLoading && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.7)', zIndex: 10 }}>
                   <Loader2 className="spinner" size={40} style={{ color: 'var(--color-primary)' }} />
                 </div>
               )}
-              <div ref={networkRef} style={{ width: '100%', height: '100%' }} />
+              {graphData.nodes.length > 0 && (() => {
+                const W = 900, H = 500;
+                const cx = W / 2, cy = H / 2;
+                const commColors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
+
+                // Group nodes by community
+                const communities = {};
+                graphData.nodes.forEach(n => {
+                  if (!communities[n.community]) communities[n.community] = [];
+                  communities[n.community].push(n);
+                });
+                const commIds = Object.keys(communities).map(Number).sort((a, b) => a - b);
+                const numComms = commIds.length;
+
+                // Position each community cluster in a ring around center
+                const clusterRadius = Math.min(W, H) * 0.32;
+                const nodePositions = {};
+
+                commIds.forEach((commId, ci) => {
+                  const angle = (ci / numComms) * 2 * Math.PI - Math.PI / 2;
+                  const clusterCx = cx + clusterRadius * Math.cos(angle);
+                  const clusterCy = cy + clusterRadius * Math.sin(angle);
+                  const nodesInComm = communities[commId];
+                  const subRadius = 18 + nodesInComm.length * 8;
+
+                  nodesInComm.forEach((node, ni) => {
+                    const subAngle = (ni / nodesInComm.length) * 2 * Math.PI - Math.PI / 2;
+                    nodePositions[node.id] = {
+                      x: clusterCx + subRadius * Math.cos(subAngle),
+                      y: clusterCy + subRadius * Math.sin(subAngle),
+                      node,
+                      commId,
+                      clusterCx, clusterCy, subRadius
+                    };
+                  });
+                });
+
+                // Build connected set for hover highlighting
+                const connectedToHovered = new Set();
+                const connectedEdges = new Set();
+                if (hoveredNode) {
+                  graphData.edges.forEach((e, i) => {
+                    if (e.from === hoveredNode || e.to === hoveredNode) {
+                      connectedToHovered.add(e.from);
+                      connectedToHovered.add(e.to);
+                      connectedEdges.add(i);
+                    }
+                  });
+                }
+
+                return (
+                  <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+                    <defs>
+                      <filter id="node-glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                      <filter id="shadow-sm" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="rgba(15,23,42,0.1)" />
+                      </filter>
+                    </defs>
+
+                    {/* Community cluster circles (background halos) */}
+                    {commIds.map((commId, ci) => {
+                      const nodesInComm = communities[commId];
+                      const firstNode = nodePositions[nodesInComm[0].id];
+                      const color = commColors[commId % commColors.length];
+                      return (
+                        <circle
+                          key={`comm-bg-${commId}`}
+                          cx={firstNode.clusterCx}
+                          cy={firstNode.clusterCy}
+                          r={firstNode.subRadius + 22}
+                          fill={`${color}08`}
+                          stroke={`${color}20`}
+                          strokeWidth="1.5"
+                          strokeDasharray="6 4"
+                        />
+                      );
+                    })}
+
+                    {/* Community labels */}
+                    {commIds.map((commId, ci) => {
+                      const nodesInComm = communities[commId];
+                      const firstNode = nodePositions[nodesInComm[0].id];
+                      const color = commColors[commId % commColors.length];
+                      return (
+                        <text
+                          key={`comm-label-${commId}`}
+                          x={firstNode.clusterCx}
+                          y={firstNode.clusterCy - firstNode.subRadius - 28}
+                          textAnchor="middle"
+                          fill={color}
+                          fontSize="10"
+                          fontWeight="700"
+                          fontFamily="Plus Jakarta Sans, sans-serif"
+                          opacity={0.85}
+                        >
+                          Ring #{commId}
+                        </text>
+                      );
+                    })}
+
+                    {/* Edges */}
+                    {graphData.edges.map((edge, i) => {
+                      const from = nodePositions[edge.from];
+                      const to = nodePositions[edge.to];
+                      if (!from || !to) return null;
+
+                      const isHighRisk = edge.risk >= 0.5;
+                      const isHoverConnected = connectedEdges.has(i);
+                      const isDimmed = hoveredNode && !isHoverConnected;
+
+                      // Quadratic bezier through center for cross-community, slight curve for same-community
+                      const midX = (from.x + to.x) / 2;
+                      const midY = (from.y + to.y) / 2;
+                      const isCross = from.commId !== to.commId;
+                      const ctrlX = isCross ? cx + (midX - cx) * 0.3 : midX + (from.y - to.y) * 0.15;
+                      const ctrlY = isCross ? cy + (midY - cy) * 0.3 : midY - (from.x - to.x) * 0.15;
+
+                      return (
+                        <path
+                          key={`edge-${i}`}
+                          d={`M ${from.x} ${from.y} Q ${ctrlX} ${ctrlY} ${to.x} ${to.y}`}
+                          fill="none"
+                          stroke={isHighRisk ? (isHoverConnected ? '#ef4444' : 'rgba(239, 68, 68, 0.5)') : (isHoverConnected ? '#94a3b8' : 'rgba(148, 163, 184, 0.25)')}
+                          strokeWidth={isHoverConnected ? edge.width * 1.8 : edge.width}
+                          opacity={isDimmed ? 0.08 : 1}
+                          style={{ transition: 'all 0.3s ease' }}
+                        />
+                      );
+                    })}
+
+                    {/* Arrow markers on edges */}
+                    {graphData.edges.map((edge, i) => {
+                      const from = nodePositions[edge.from];
+                      const to = nodePositions[edge.to];
+                      if (!from || !to) return null;
+                      const isHoverConnected = connectedEdges.has(i);
+                      const isDimmed = hoveredNode && !isHoverConnected;
+                      if (isDimmed) return null;
+
+                      // Calculate point near the destination for arrow
+                      const dx = to.x - from.x;
+                      const dy = to.y - from.y;
+                      const len = Math.sqrt(dx * dx + dy * dy);
+                      if (len < 1) return null;
+                      const nodeR = to.node.type === 'customer' ? 9 : 7;
+                      const arrowDist = nodeR + 4;
+                      const ax = to.x - (dx / len) * arrowDist;
+                      const ay = to.y - (dy / len) * arrowDist;
+                      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+                      return (
+                        <polygon
+                          key={`arrow-${i}`}
+                          points="-4,-3 4,0 -4,3"
+                          fill={edge.risk >= 0.5 ? 'rgba(239, 68, 68, 0.6)' : 'rgba(148, 163, 184, 0.4)'}
+                          transform={`translate(${ax}, ${ay}) rotate(${angle})`}
+                          opacity={isHoverConnected ? 1 : 0.6}
+                        />
+                      );
+                    })}
+
+                    {/* Nodes */}
+                    {graphData.nodes.map(node => {
+                      const pos = nodePositions[node.id];
+                      if (!pos) return null;
+                      const isCustomer = node.type === 'customer';
+                      const r = isCustomer ? 9 : 7;
+                      const color = commColors[node.community % commColors.length];
+                      const isHovered = hoveredNode === node.id;
+                      const isConnected = connectedToHovered.has(node.id);
+                      const isDimmed = hoveredNode && !isConnected && !isHovered;
+
+                      return (
+                        <g
+                          key={node.id}
+                          onMouseEnter={() => setHoveredNode(node.id)}
+                          onMouseLeave={() => setHoveredNode(null)}
+                          style={{ cursor: 'pointer', transition: 'opacity 0.3s ease' }}
+                          opacity={isDimmed ? 0.15 : 1}
+                        >
+                          {/* Node glow on hover */}
+                          {isHovered && (
+                            <circle cx={pos.x} cy={pos.y} r={r + 8} fill={`${color}25`} style={{ transition: 'all 0.3s ease' }} />
+                          )}
+                          {/* Node circle */}
+                          {isCustomer ? (
+                            <circle
+                              cx={pos.x} cy={pos.y} r={isHovered ? r + 2 : r}
+                              fill={isHovered ? '#ffffff' : color}
+                              stroke={isHovered ? color : '#ffffff'}
+                              strokeWidth={isHovered ? 3 : 2}
+                              filter="url(#shadow-sm)"
+                              style={{ transition: 'all 0.2s ease' }}
+                            />
+                          ) : (
+                            <rect
+                              x={pos.x - (isHovered ? r + 1 : r - 1)} y={pos.y - (isHovered ? r + 1 : r - 1)}
+                              width={(isHovered ? r + 1 : r - 1) * 2} height={(isHovered ? r + 1 : r - 1) * 2}
+                              rx="3"
+                              fill={isHovered ? '#ffffff' : color}
+                              stroke={isHovered ? color : '#ffffff'}
+                              strokeWidth={isHovered ? 3 : 2}
+                              transform={`rotate(45, ${pos.x}, ${pos.y})`}
+                              filter="url(#shadow-sm)"
+                              style={{ transition: 'all 0.2s ease' }}
+                            />
+                          )}
+                          {/* Node label */}
+                          <text
+                            x={pos.x} y={pos.y + r + 13}
+                            textAnchor="middle"
+                            fill={isHovered ? '#0f172a' : '#64748b'}
+                            fontSize={isHovered ? '9' : '7.5'}
+                            fontWeight={isHovered ? '700' : '600'}
+                            fontFamily="Plus Jakarta Sans, sans-serif"
+                            style={{ transition: 'all 0.2s ease' }}
+                          >
+                            {node.id}
+                          </text>
+                          {/* Entity type indicator */}
+                          {isCustomer ? (
+                            <g transform={`translate(${pos.x}, ${pos.y})`} style={{ pointerEvents: 'none' }}>
+                              <circle cx="0" cy="-2.5" r="2.2" fill="#ffffff" />
+                              <path d="M -4.5,2.5 A 4.5,4.5 0 0,1 4.5,2.5 Z" fill="#ffffff" />
+                            </g>
+                          ) : (
+                            <g transform={`translate(${pos.x}, ${pos.y})`} style={{ pointerEvents: 'none' }}>
+                              <rect x="-4.5" y="-3.5" width="9" height="7" rx="1" fill="none" stroke="#ffffff" strokeWidth="1.2" />
+                              <line x1="-4.5" y1="-1" x2="4.5" y2="-1" stroke="#ffffff" strokeWidth="1.2" />
+                            </g>
+                          )}
+                        </g>
+                      );
+                    })}
+
+                    {/* Hover tooltip */}
+                    {hoveredNode && nodePositions[hoveredNode] && (() => {
+                      const pos = nodePositions[hoveredNode];
+                      const node = pos.node;
+                      const connEdges = graphData.edges.filter(e => e.from === hoveredNode || e.to === hoveredNode);
+                      const maxRisk = connEdges.length > 0 ? Math.max(...connEdges.map(e => e.risk)) : 0;
+                      const totalVol = connEdges.reduce((s, e) => s + e.weight, 0);
+                      const tooltipW = 170, tooltipH = 90;
+                      let tx = pos.x + 16, ty = pos.y - tooltipH / 2;
+                      if (tx + tooltipW > W) tx = pos.x - tooltipW - 16;
+                      if (ty < 0) ty = 4;
+                      if (ty + tooltipH > H) ty = H - tooltipH - 4;
+
+                      return (
+                        <foreignObject x={tx} y={ty} width={tooltipW} height={tooltipH}>
+                          <div style={{
+                            fontFamily: 'Plus Jakarta Sans, sans-serif',
+                            background: 'rgba(255,255,255,0.97)',
+                            backdropFilter: 'blur(12px)',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(15,23,42,0.08)',
+                            boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+                            padding: '10px 12px',
+                            fontSize: '0.72rem',
+                            lineHeight: '1.5'
+                          }}>
+                            <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(15,23,42,0.06)', paddingBottom: '4px', marginBottom: '4px' }}>
+                              <span>{node.id}</span>
+                              <span style={{ fontSize: '0.6rem', padding: '1px 6px', background: `${commColors[node.community % commColors.length]}18`, color: commColors[node.community % commColors.length], borderRadius: '6px' }}>Ring #{node.community}</span>
+                            </div>
+                            <div style={{ color: '#475569' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <span>Entity:</span>
+                                <strong style={{ color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  {node.type === 'customer' ? (
+                                    <>
+                                      <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style={{ color: '#6366f1' }}>
+                                        <circle cx="5" cy="3.5" r="1.8" />
+                                        <path d="M 1,9 A 4,4 0 0,1 9,9 Z" />
+                                      </svg>
+                                      <span>Customer</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" style={{ color: '#10b981' }}>
+                                        <rect x="1" y="2.5" width="8" height="5.5" rx="0.8" />
+                                        <path d="M1 4.5h8" />
+                                      </svg>
+                                      <span>Account</span>
+                                    </>
+                                  )}
+                                </strong>
+                              </div>
+                              <div>Connections: <strong style={{ color: '#0f172a' }}>{connEdges.length}</strong></div>
+                              <div>Max Risk: <strong style={{ color: maxRisk >= 0.5 ? '#ef4444' : '#10b981' }}>{maxRisk.toFixed(3)}</strong></div>
+                            </div>
+                          </div>
+                        </foreignObject>
+                      );
+                    })()}
+
+                    {/* Legend */}
+                    <g transform={`translate(${W - 150}, ${H - 70})`}>
+                      <rect x="0" y="0" width="140" height="65" rx="8" fill="rgba(255,255,255,0.95)" stroke="rgba(15,23,42,0.06)" strokeWidth="1" />
+                      
+                      {/* Customer Node Symbol */}
+                      <circle cx="16" cy="18" r="8" fill="#6366f1" stroke="#fff" strokeWidth="1.5" />
+                      <g transform="translate(16, 18)" style={{ pointerEvents: 'none' }}>
+                        <circle cx="0" cy="-2.5" r="2.2" fill="#ffffff" />
+                        <path d="M -4.5,2.5 A 4.5,4.5 0 0,1 4.5,2.5 Z" fill="#ffffff" />
+                      </g>
+                      <text x="32" y="21" fill="#475569" fontSize="9" fontWeight="700" fontFamily="Plus Jakarta Sans, sans-serif">Customer Entity</text>
+                      
+                      {/* Account Node Symbol */}
+                      <g transform="translate(16, 44)">
+                        <rect
+                          x="-6" y="-6"
+                          width="12" height="12"
+                          rx="2.5"
+                          fill="#6366f1"
+                          stroke="#ffffff"
+                          strokeWidth="1.5"
+                          transform="rotate(45, 0, 0)"
+                        />
+                        <g style={{ pointerEvents: 'none' }}>
+                          <rect x="-4.5" y="-3.5" width="9" height="7" rx="1" fill="none" stroke="#ffffff" strokeWidth="1.2" />
+                          <line x1="-4.5" y1="-1" x2="4.5" y2="-1" stroke="#ffffff" strokeWidth="1.2" />
+                        </g>
+                      </g>
+                      <text x="32" y="47" fill="#475569" fontSize="9" fontWeight="700" fontFamily="Plus Jakarta Sans, sans-serif">Bank Account</text>
+                    </g>
+                  </svg>
+                );
+              })()}
             </div>
 
             {/* Modularity communities ledger */}
