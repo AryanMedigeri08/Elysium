@@ -39,6 +39,8 @@ print(f"   Active project: {_project_id}")
 print("=" * 60)
 
 # Initialize Vertex AI (uses application default credentials)
+import vertexai
+vertexai.init(project=PROJECT_ID, location=LOCATION)
 aiplatform.init(project=PROJECT_ID, location=LOCATION)
 
 # Flash keywords — queries containing these route to the fast model
