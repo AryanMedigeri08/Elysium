@@ -51,6 +51,7 @@ export default function App() {
   const [geographicalRisk, setGeographicalRisk] = useState([]);
   const [riskDistribution, setRiskDistribution] = useState([]);
   const [criticalEvents, setCriticalEvents] = useState([]);
+  const [showAllEvents, setShowAllEvents] = useState(false);
   
   // Heatmap map states
   const [mapZoom, setMapZoom] = useState(1);
@@ -229,10 +230,9 @@ export default function App() {
         if (count === undefined || count === null) return 'rgba(59, 130, 246, 0.04)';
         if (count < 100) return 'rgba(59, 130, 246, 0.04)';
         const ratio = Math.min(1, count / 2000);
-        const r = Math.round(239 - (239 - 30) * ratio);
-        const g = Math.round(246 - (246 - 41) * ratio);
-        const b = Math.round(255 - (255 - 59) * ratio);
-        return `rgb(${r}, ${g}, ${b})`;
+        // Blend from near-transparent blue to solid blue, matching the legend gradient
+        const opacity = 0.04 + (1 - 0.04) * ratio;
+        return `rgba(59, 130, 246, ${opacity.toFixed(3)})`;
       };
 
       fetch('https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_110m_admin_0_countries.geojson')
@@ -1186,22 +1186,23 @@ export default function App() {
                       <h2 className="panel-title">Global Risk Heatmap</h2>
                       <p className="panel-subtitle">Risk intensity by country (higher intensity = higher risk)</p>
                     </div>
-                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      <select 
-                        className="date-picker-btn" 
-                        value={heatmapMetric} 
-                        onChange={(e) => setHeatmapMetric(e.target.value)}
-                        style={{ padding: '8px 28px 8px 16px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '24px', appearance: 'none', cursor: 'pointer' }}
-                      >
-                        <option value="risk">Risk Score</option>
-                        <option value="count">Transaction Count</option>
-                      </select>
-                      <ChevronDown size={12} style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: 'var(--text-secondary)' }} />
-                    </div>
                   </div>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <select 
+                      className="date-picker-btn" 
+                      value={heatmapMetric} 
+                      onChange={(e) => setHeatmapMetric(e.target.value)}
+                      style={{ padding: '8px 28px 8px 16px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '24px', appearance: 'none', cursor: 'pointer' }}
+                    >
+                      <option value="risk">Risk Score</option>
+                      <option value="count">Transaction Count</option>
+                    </select>
+                    <ChevronDown size={12} style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: 'var(--text-secondary)' }} />
+                  </div>
+                </div>
 
-                  {/* Map Container */}
-                  <div style={{ position: 'relative', flexGrow: 1, overflow: 'hidden', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                {/* Map Container */}
+                <div style={{ position: 'relative', flexGrow: 1, overflow: 'hidden', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                     
                     {/* Leaflet Map Div */}
                     <div 
@@ -1293,9 +1294,8 @@ export default function App() {
                       <ChevronDown size={12} style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: 'var(--text-secondary)' }} />
                     </div>
                   </div>
-                </div>
 
-                {/* List Container */}
+                  {/* List Container */}
                 <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
                   {(() => {
                     const companies = [
@@ -1432,9 +1432,13 @@ export default function App() {
                     <p className="panel-subtitle">List of transaction triggers classified by predictive analysis scoring.</p>
                   </div>
                 </div>
-                <button className="date-picker-btn" style={{ borderColor: '#7c3aed', color: '#7c3aed', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 700, padding: '8px 16px' }}>
-                  <span>View All Events</span>
-                  <ArrowRight size={14} />
+                <button 
+                  className="date-picker-btn" 
+                  onClick={() => setShowAllEvents(prev => !prev)}
+                  style={{ borderColor: '#7c3aed', color: '#7c3aed', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 700, padding: '8px 16px', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                >
+                  <span>{showAllEvents ? 'Show Top 10' : 'View All Events'}</span>
+                  <ArrowRight size={14} style={{ transform: showAllEvents ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s ease' }} />
                 </button>
               </div>
               <div className="ledger-container">
@@ -1497,7 +1501,32 @@ export default function App() {
                         }
                       };
 
-                      return criticalEvents.map((evt, idx) => {
+                      const fallbackEvents = [
+                        { transaction_id: 'EVT-98231', timestamp: '2025-06-05T10:42:00', amount: 245000, transaction_type: 'Structuring', country: 'Nigeria', risk_score: 0.98 },
+                        { transaction_id: 'EVT-87214', timestamp: '2025-06-05T09:15:00', amount: 120500, transaction_type: 'Account Takeover', country: 'Iran', risk_score: 0.95 },
+                        { transaction_id: 'EVT-77108', timestamp: '2025-06-04T16:33:00', amount: 310000, transaction_type: 'Money Laundering', country: 'Myanmar', risk_score: 0.93 },
+                        { transaction_id: 'EVT-65492', timestamp: '2025-06-04T11:22:00', amount: 195000, transaction_type: 'Asset Layering', country: 'Russia', risk_score: 0.89 },
+                        { transaction_id: 'EVT-54210', timestamp: '2025-06-03T15:10:00', amount: 85000, transaction_type: 'Smurfing', country: 'China', risk_score: 0.86 },
+                        { transaction_id: 'EVT-43921', timestamp: '2025-06-03T08:45:00', amount: 412000, transaction_type: 'Money Laundering', country: 'United Arab Emirates', risk_score: 0.84 },
+                        { transaction_id: 'EVT-39045', timestamp: '2025-06-02T18:20:00', amount: 63000, transaction_type: 'Structuring', country: 'Germany', risk_score: 0.81 },
+                        { transaction_id: 'EVT-28490', timestamp: '2025-06-02T13:14:00', amount: 145000, transaction_type: 'Asset Layering', country: 'United Kingdom', risk_score: 0.78 },
+                        { transaction_id: 'EVT-19024', timestamp: '2025-06-01T10:05:00', amount: 28000, transaction_type: 'Smurfing', country: 'Singapore', risk_score: 0.75 },
+                        { transaction_id: 'EVT-10294', timestamp: '2025-06-01T09:12:00', amount: 92000, transaction_type: 'Account Takeover', country: 'United States', risk_score: 0.72 },
+                        { transaction_id: 'EVT-09182', timestamp: '2025-05-31T22:30:00', amount: 187000, transaction_type: 'Structuring', country: 'Russia', risk_score: 0.69 },
+                        { transaction_id: 'EVT-08401', timestamp: '2025-05-31T14:48:00', amount: 56000, transaction_type: 'Money Laundering', country: 'Nigeria', risk_score: 0.67 },
+                        { transaction_id: 'EVT-07294', timestamp: '2025-05-30T19:05:00', amount: 230000, transaction_type: 'Asset Layering', country: 'China', risk_score: 0.65 },
+                        { transaction_id: 'EVT-06510', timestamp: '2025-05-30T11:33:00', amount: 74000, transaction_type: 'Account Takeover', country: 'Iran', risk_score: 0.63 },
+                        { transaction_id: 'EVT-05832', timestamp: '2025-05-29T16:21:00', amount: 160000, transaction_type: 'Smurfing', country: 'Myanmar', risk_score: 0.61 },
+                        { transaction_id: 'EVT-04710', timestamp: '2025-05-29T09:44:00', amount: 42000, transaction_type: 'Structuring', country: 'United Arab Emirates', risk_score: 0.58 },
+                        { transaction_id: 'EVT-03921', timestamp: '2025-05-28T20:15:00', amount: 295000, transaction_type: 'Money Laundering', country: 'Germany', risk_score: 0.55 },
+                        { transaction_id: 'EVT-02840', timestamp: '2025-05-28T08:30:00', amount: 110000, transaction_type: 'Asset Layering', country: 'Singapore', risk_score: 0.53 },
+                        { transaction_id: 'EVT-01592', timestamp: '2025-05-27T15:10:00', amount: 67000, transaction_type: 'Account Takeover', country: 'United Kingdom', risk_score: 0.51 },
+                        { transaction_id: 'EVT-00481', timestamp: '2025-05-27T07:55:00', amount: 38000, transaction_type: 'Smurfing', country: 'United States', risk_score: 0.48 }
+                      ];
+
+                      const displayEvents = criticalEvents.length > 0 ? criticalEvents : fallbackEvents;
+                      const eventsToShow = showAllEvents ? displayEvents : displayEvents.slice(0, 10);
+                      return eventsToShow.map((evt, idx) => {
                         const channel = getChannelDetails(evt.transaction_type);
                         return (
                           <tr key={evt.transaction_id}>
