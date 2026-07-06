@@ -1593,19 +1593,28 @@ export default function App() {
 
                 commIds.forEach((commId, ci) => {
                   const angle = (ci / numComms) * 2 * Math.PI - Math.PI / 2;
-                  const clusterCx = cx + clusterRadius * Math.cos(angle);
-                  const clusterCy = cy + clusterRadius * Math.sin(angle);
+                  const clusterCx = numComms === 1 ? cx : cx + clusterRadius * Math.cos(angle);
+                  const clusterCy = numComms === 1 ? cy : cy + clusterRadius * Math.sin(angle);
                   const nodesInComm = communities[commId];
-                  const subRadius = 18 + nodesInComm.length * 8;
+                  
+                  // Cap subRadius to fit within viewport
+                  const maxSubRadius = numComms === 1 ? Math.min(W, H) * 0.42 : Math.min(W, H) * 0.18;
+                  const subRadius = Math.min(maxSubRadius, 25 + Math.sqrt(nodesInComm.length) * 12);
 
                   nodesInComm.forEach((node, ni) => {
-                    const subAngle = (ni / nodesInComm.length) * 2 * Math.PI - Math.PI / 2;
+                    // Golden spiral layout inside the cluster to prevent nodes from flying off-screen
+                    const fraction = (ni + 0.5) / nodesInComm.length;
+                    const r_ni = subRadius * Math.sqrt(fraction);
+                    const theta_ni = ni * 2.39996; // Golden angle in radians
+                    
                     nodePositions[node.id] = {
-                      x: clusterCx + subRadius * Math.cos(subAngle),
-                      y: clusterCy + subRadius * Math.sin(subAngle),
+                      x: clusterCx + r_ni * Math.cos(theta_ni),
+                      y: clusterCy + r_ni * Math.sin(theta_ni),
                       node,
                       commId,
-                      clusterCx, clusterCy, subRadius
+                      clusterCx,
+                      clusterCy,
+                      subRadius
                     };
                   });
                 });
