@@ -1,5 +1,13 @@
-FROM python:3.11-slim
+# Stage 1: Build React Frontend
+FROM node:20 AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
 
+# Stage 2: Serve via FastAPI Backend
+FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies
@@ -7,22 +15,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Install python requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application files
 COPY . .
 
-# Expose Streamlit port
+# Copy built frontend assets from Stage 1
+COPY --from=frontend-builder /frontend/dist /app/frontend/dist
+
+# Expose port (Cloud Run default)
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK CMD curl --fail http://localhost:8080/_stcore/health || exit 1
-
-# Run Streamlit
-ENTRYPOINT ["streamlit", "run", "app/streamlit_app.py", \
-    "--server.port=8080", \
-    "--server.address=0.0.0.0", \
-    "--server.headless=true", \
-    "--browser.gatherUsageStats=false"]
+# Run FastAPI backend server
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
