@@ -34,12 +34,16 @@ if IN_COLAB:
     print("✅ cuDF installed successfully")
 
 # ──────────────────────────────────────────────
-# ENABLE cuDF-accelerated pandas
+# ENABLE cuDF-accelerated pandas (with CPU fallback)
 # ──────────────────────────────────────────────
 # Using the programmatic equivalent of %load_ext cudf.pandas
 # so this works when run as a plain script (not just in a notebook cell)
-import cudf.pandas
-cudf.pandas.install()
+try:
+    import cudf.pandas
+    cudf.pandas.install()
+    print("⚡ RAPIDS cuDF GPU acceleration enabled!")
+except ImportError:
+    print("ℹ️ cuDF is not installed or GPU is not available. Falling back to CPU execution using standard pandas.")
 
 import time
 import pandas as pd
