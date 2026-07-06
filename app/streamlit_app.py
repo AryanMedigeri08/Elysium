@@ -686,7 +686,7 @@ with tab_overview:
             ),
             xaxis=dict(showgrid=False)
         )
-        st.plotly_chart(fig_trend, use_container_width=True)
+        st.plotly_chart(fig_trend, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
         
     with col_right:
@@ -711,7 +711,7 @@ with tab_overview:
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(family="Plus Jakarta Sans, sans-serif")
         )
-        st.plotly_chart(fig_donut, use_container_width=True)
+        st.plotly_chart(fig_donut, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Secondary row: Transaction Type averages in columns
@@ -762,7 +762,7 @@ with tab_risk_details:
             xaxis=dict(showgrid=True, gridcolor='#f1f5f9'),
             yaxis=dict(autorange="reversed")
         )
-        st.plotly_chart(fig_country, use_container_width=True)
+        st.plotly_chart(fig_country, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
         
     with col_r2:
@@ -788,7 +788,7 @@ with tab_risk_details:
             yaxis=dict(showgrid=True, gridcolor='#f1f5f9'),
             xaxis=dict(showgrid=False)
         )
-        st.plotly_chart(fig_dist, use_container_width=True)
+        st.plotly_chart(fig_dist, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
     # 10 Highest Risk table
@@ -815,7 +815,7 @@ with tab_risk_details:
                 "risk_score": "{:.4f}"
             }
         ),
-        use_container_width=True
+        width='stretch'
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -914,7 +914,7 @@ with tab_graph:
             net.save_graph(tmp.name)
             with open(tmp.name, 'r', encoding='utf-8') as f:
                 html_code = f.read()
-                components.html(html_code, height=500, scrolling=False)
+                st.iframe(src=html_code, height=500)
                 
         # Display Community detection analytics below graph
         st.markdown("### 🕸️ Louvain Ring Risk Assessment Ledger")
@@ -949,7 +949,7 @@ with tab_graph:
                 "Aggregate Volume": "${:,.2f}",
                 "Vulnerability Risk Rating": "{:.4f}"
             }),
-            use_container_width=True
+            width='stretch'
         )
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -979,7 +979,7 @@ with tab_copilot:
     clicked_suggested = None
     for idx, prompt_val in enumerate(suggested_queries):
         with cols[idx]:
-            if st.button(prompt_val, key=f"suggest_{idx}", use_container_width=True):
+            if st.button(prompt_val, key=f"suggest_{idx}", width='stretch'):
                 clicked_suggested = prompt_val
 
     # Standard chat history display
@@ -993,6 +993,64 @@ with tab_copilot:
                     f'<div class="badge-container {model_class}">{icon_symbol} {message["model"]}</div>',
                     unsafe_allow_html=True,
                 )
+
+    def get_mock_ai_response(query):
+        query_lower = query.lower()
+        if "wire" in query_lower:
+            return """### 📋 Elysium Compliance Memo: International Wire Transfer Risks
+
+Based on Elysium's transaction monitoring policy (Doc: [wire_transfer_risks.txt](file:///c:/elysium/rag_documents/wire_transfer_risks.txt)), international wire transfers present elevated risk profiles due to the following factors:
+
+1. **Velocity Stacking:** Multiple transfers initiated to the same recipient corridor within a 24-hour window (threshold: $10,000 aggregate).
+2. **Sanctioned Corridors:** High exposure to Tier 1 High-Risk countries (e.g., Myanmar, Iran, Russia) where strict Enhanced Due Diligence (EDD) is mandated.
+3. **Mule Intermediaries:** Frequent routing through shell structures or newly registered entities acting as layering hubs.
+
+**Recommended Actions:**
+* Enforce 2-factor verification for transfers exceeding $50,000.
+* Escalate any transactions with a country risk score > 7.0 directly to the AML Compliance Committee.
+
+*Note: This is a simulated compliance response because GCP Application Default Credentials (ADC) were not found on this local environment.*"""
+        elif "kyc" in query_lower or "escalat" in query_lower:
+            return """### 🔑 Elysium AML/KYC Escalation Protocol
+
+Under Elysium's escalation policy (Doc: [kyc_aml_escalation_policy.txt](file:///c:/elysium/rag_documents/kyc_aml_escalation_policy.txt)), the standard escalation path is as follows:
+
+1. **Level 1 (Analyst Review):** Triggered by initial system alerts (e.g., risk score ≥ 0.6). Analysts must verify customer identities and source of wealth within 48 hours.
+2. **Level 2 (Compliance Officer Sign-off):** Required if verification documents are missing or if the entity is registered in a Tier 2 country. SLA: 5 business days.
+3. **Level 3 (AML Committee / Board Review):** Ultimate authority for relationships involving PEPs (Politically Exposed Persons) or Tier 1 countries. SLA: 2 business days.
+
+*Note: This is a simulated compliance response because GCP Application Default Credentials (ADC) were not found on this local environment.*"""
+        elif "credit" in query_lower or "warn" in query_lower:
+            return """### 📉 Elysium Credit Risk Warnings
+
+According to Elysium's credit policy (Doc: [credit_risk_warnings.txt](file:///c:/elysium/rag_documents/credit_risk_warnings.txt)), early warning signs of credit deterioration are categorized into three levels of priority:
+
+1. **High Priority (Immediate Action):** 
+   - Days Past Due (DPD) exceeding 30 days.
+   - Sudden debt-to-equity ratio spike > 2.5x.
+   - Material adverse change in primary supplier agreements.
+2. **Medium Priority (Quarterly Review):**
+   - Margin contraction of > 15% year-over-year.
+   - Key management turnover (C-Suite resignations).
+3. **Low Priority (Monitoring):**
+   - Sector downgrades or industry macroeconomic downturns.
+
+*Note: This is a simulated compliance response because GCP Application Default Credentials (ADC) were not found on this local environment.*"""
+        else:
+            return f"""### 🔍 Elysium Risk Analysis
+
+Thank you for your query: *"{query}"*. 
+
+To retrieve grounded facts from the Elysium knowledge base using Gemini Pro and BigQuery Vector Search, please configure your Google Cloud Application Default Credentials (ADC) by running:
+```bash
+gcloud auth application-default login
+```
+Or set the path to your service account key file:
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="path/to/key.json"
+```
+
+*Note: This is a placeholder response because GCP credentials are currently missing.*"""
 
     # Processing function for prompt execution
     def run_query(user_query):
@@ -1026,11 +1084,32 @@ with tab_copilot:
                         }
                     )
                 except Exception as err:
-                    error_msg = f"⚠️ Could not load model router query: {err}"
-                    st.error(error_msg)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": error_msg}
-                    )
+                    err_str = str(err)
+                    if "credentials" in err_str.lower() or "auth" in err_str.lower() or "not found" in err_str.lower():
+                        st.warning("🔐 **GCP Credentials Missing / Offline Mode:** Operating with simulated RAG compliance data. Set up Application Default Credentials (ADC) to enable live Gemini queries.")
+                        answer = get_mock_ai_response(user_query)
+                        model_used = "Simulated Copilot (Local Mock)"
+                        
+                        st.markdown(answer)
+                        model_class = "badge-flash"
+                        icon_symbol = "ℹ️"
+                        st.markdown(
+                            f'<div class="badge-container {model_class}">{icon_symbol} {model_used}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        st.session_state.messages.append(
+                            {
+                                "role": "assistant",
+                                "content": answer,
+                                "model": model_used
+                            }
+                        )
+                    else:
+                        error_msg = f"⚠️ Could not load model router query: {err}"
+                        st.error(error_msg)
+                        st.session_state.messages.append(
+                            {"role": "assistant", "content": error_msg}
+                        )
         st.rerun()
 
     # If suggested query was clicked
