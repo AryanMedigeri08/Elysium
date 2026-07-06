@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import './App.css';
 
-const API_BASE = ""; // We serve FastAPI and React on same origin in production
+const API_BASE = window.location.port === "5173" ? "http://localhost:8000" : "";
 const PROJECT_ID = "elysium-501518";
 
 export default function App() {

@@ -589,6 +589,7 @@ def post_copilot(req: CopilotRequest):
         return {"answer": answer, "model": model_used}
     except Exception as err:
         err_str = str(err)
+        print(f"[ERROR] post_copilot failed: {err}")
         if "credentials" in err_str.lower() or "auth" in err_str.lower() or "not found" in err_str.lower():
             return {
                 "answer": get_mock_ai_response(req.query),

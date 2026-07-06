@@ -1,16 +1,50 @@
-# React + Vite
+# 🎨 Elysium AI — React Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+This directory contains the React + Vite frontend application for **Elysium AI**, a real-time financial risk intelligence dashboard.
 
-Currently, two official plugins are available:
+## 🛠️ Tech Stack & Styling
+- **Core:** React 19, Vite 8, JavaScript (ES modules)
+- **Icons:** [lucide-react](https://lucide.dev/)
+- **Linting:** [oxlint](https://oxc.rs/docs/guide/usage/linter.html) (ultra-fast JS/TS linter)
+- **Styling:** Vanilla CSS (custom modern dashboard design)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 🚀 Available Commands
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Run these commands from the `frontend/` directory:
 
-## Expanding the Oxlint configuration
+### 1. Install Dependencies
+Installs all required package dependencies.
+```bash
+npm install
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+### 2. Run Development Server
+Starts the local development server with Hot Module Replacement (HMR).
+```bash
+npm run dev
+```
+- Default URL: `http://localhost:5173/`
+- Connects to the FastAPI backend API (by default assumes backend runs at `http://localhost:8000`).
+
+### 3. Build for Production
+Compiles and bundles the application assets into the `dist/` directory.
+```bash
+npm run build
+```
+- Output directory: `frontend/dist/`
+- These built assets are automatically served by the FastAPI backend when it is run.
+
+### 4. Run Linter
+Runs `oxlint` to perform fast static analysis and syntax linting on files.
+```bash
+npm run lint
+```
+
+### 5. Preview Production Build
+Locally preview the built application before deployment.
+```bash
+npm run preview
+```
+- Serves the compiled files from the `dist/` folder on a local port.

@@ -79,7 +79,12 @@ Elysium AI is an end-to-end risk intelligence platform that:
 ```
 elysium/
 ├── app/
-│   └── streamlit_app.py          # Streamlit dashboard + chat UI
+│   ├── main.py                   # FastAPI backend server (serves API & frontend dist)
+│   └── streamlit_app.py          # Legacy Streamlit dashboard + chat UI
+├── frontend/                     # React + Vite frontend application
+│   ├── src/                      # React components, styles, and logic
+│   ├── package.json              # Frontend scripts and dependencies
+│   └── vite.config.js            # Vite configurations
 ├── rag_documents/                # 12 RAG knowledge base documents
 │   ├── high_risk_countries.txt
 │   ├── fraud_patterns.txt
@@ -99,7 +104,7 @@ elysium/
 ├── retrieve.py                   # Vector search retrieval function
 ├── model_router.py               # Gemini Flash/Pro intelligent router
 ├── requirements.txt              # Python dependencies
-├── Dockerfile                    # Cloud Run container config
+├── Dockerfile                    # Multi-stage Dockerfile (builds frontend, runs FastAPI)
 └── README.md                     # This file
 ```
 
@@ -136,13 +141,66 @@ elysium/
 ```
 
 ### Step 4: Test Locally
-```bash
-pip install -r requirements.txt
-streamlit run app/streamlit_app.py
-```
+
+You can run Elysium AI locally either as a modern **React Frontend + FastAPI Backend** application (recommended) or using the legacy **Streamlit Dashboard**.
+
+#### Option A: FastAPI Backend + React Frontend (Recommended)
+
+1. **Install backend dependencies:**
+   ```bash
+   conda deactivate
+   pip install -r requirements.txt
+   ```
+
+2. **Install frontend dependencies:**
+   ```bash
+   cd frontend
+   npm install
+   cd ..
+   ```
+
+3. **Start the development servers:**
+   - **Backend API:** Run the FastAPI server from the root directory:
+     ```bash
+     conda deactivate
+     python -m uvicorn app.main:app --reload
+     ```
+     The backend API will start at `http://127.0.0.1:8000/`.
+     
+   - **Frontend Dev Server:** Run Vite from the `frontend/` directory:
+     ```bash
+     cd frontend
+     npm run dev
+     ```
+     The frontend will be accessible at `http://localhost:5173/` (or the port shown in your terminal).
+
+4. **Production Build & Serve:**
+   To build the React application and serve the static files directly from the FastAPI server:
+   ```bash
+   cd frontend
+   npm run build
+   cd ..
+   conda deactivate
+   python -m uvicorn app.main:app
+   ```
+   Open `http://127.0.0.1:8080/` (or `http://127.0.0.1:8000/` depending on your environment port) to access the integrated application.
+
+#### Option B: Streamlit Dashboard
+
+1. **Install dependencies:**
+   ```bash
+   conda deactivate
+   pip install -r requirements.txt
+   ```
+
+2. **Run Streamlit app:**
+   ```bash
+   conda deactivate
+   streamlit run app/streamlit_app.py
+   ```
 
 > [!TIP]
-> **Offline Demo Mode:** If you run the dashboard locally without Google Cloud credentials (ADC) configured, the application automatically switches to **Offline Fallback Mode**. The metrics, charts, interactive graph, and chat copilot will operate on simulated mock data, allowing you to instantly preview all visual features without any cloud setup!
+> **Offline Demo Mode:** If you run either application locally without Google Cloud credentials (ADC) configured, they automatically switch to **Offline Fallback Mode**. The metrics, charts, interactive graphs, and compliance copilot will operate on simulated mock data, allowing you to instantly preview all features without any cloud setup!
 
 ### Step 5: Deploy to Cloud Run
 ```bash
