@@ -71,14 +71,14 @@
 }
 
 .nav-item:hover {
-  background: rgba(99, 102, 241, 0.04);
-  color: var(--color-primary);
+  background: rgba(168, 85, 247, 0.05);
+  color: var(--color-secondary);
 }
 
 .nav-item.active {
-  background: rgba(99, 102, 241, 0.08);
-  color: var(--color-primary);
-  border-left: 3px solid var(--color-primary);
+  background: rgba(168, 85, 247, 0.1);
+  color: var(--color-secondary);
+  border-left: 3px solid var(--color-secondary);
 }
 
 .sidebar-footer {
