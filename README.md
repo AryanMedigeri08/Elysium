@@ -1,59 +1,59 @@
-# 🔍 Elysium AI — Real-Time Financial Risk Intelligence
+# Elysium AI — Real-Time Financial Risk Intelligence
 
-> **An AI-powered risk intelligence platform** that combines GPU-accelerated data processing, RAG-enhanced knowledge retrieval, and intelligent model routing to deliver real-time financial risk analysis. Built for the Google Cloud × NVIDIA Hackathon.
+> **An AI-powered risk intelligence platform** that combines GPU-accelerated data processing, RAG-enhanced knowledge retrieval, and intelligent model routing to deliver real-time financial risk analysis. Built for the Google Cloud x NVIDIA Hackathon.
 
 [![Deploy to Cloud Run](https://img.shields.io/badge/Cloud%20Run-Deployed-blue?logo=google-cloud)](DEPLOYMENT_LINK)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/AryanMedigeri08/Elysium)
 
 ---
 
-## 🎯 Problem Statement
+## Problem Statement
 
 Financial institutions process millions of transactions daily, requiring real-time risk assessment that balances speed with analytical depth. Traditional rule-based systems miss complex fraud patterns, while manual review creates bottlenecks. Organizations need an intelligent system that can rapidly score transaction risk, retrieve relevant institutional knowledge, and provide context-aware analysis — all at scale.
 
-## 💡 Solution
+## Solution
 
 Elysium AI is an end-to-end risk intelligence platform that:
 1. **Ingests and enriches** 500K+ transactions with GPU-accelerated ETL using RAPIDS cuDF
 2. **Embeds and indexes** institutional knowledge documents for instant RAG retrieval via BigQuery Vector Search
 3. **Intelligently routes** queries to Gemini Flash (fast/simple) or Gemini Pro (complex/RAG-grounded) based on query classification
-4. **Isolates Fraud Rings** using bipartite graph structures (Customer ➔ Account), running the **Louvain Modularity Clustering** algorithm to isolate coordinated fraud syndicates
+4. **Isolates Fraud Rings** using bipartite graph structures (Customer -> Account), running the **Louvain Modularity Clustering** algorithm to isolate coordinated fraud syndicates
 5. **Visualizes** risk metrics, temporal trends, modular communities, and interactive network graphs in a premium, light-themed Streamlit dashboard deployed on Cloud Run (with offline simulated demo support)
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────┐     ┌──────────────┐     ┌─────────────────────┐
 │  Cloud Storage   │────▶│   BigQuery   │────▶│  RAPIDS cuDF ETL    │
 │  (Raw Data +     │     │  (Data       │     │  (GPU-Accelerated   │
 │   RAG Documents) │     │   Warehouse) │     │   Risk Scoring)     │
-└─────────────────┘     └──────┬───────┘     └──────────┬──────────┘
-                               │                         │
-                               ▼                         ▼
-                    ┌──────────────────┐     ┌──────────────────────┐
-                    │  BigQuery Vector │     │  BigQuery Enriched   │
-                    │  Search (RAG)    │     │  Transactions        │
-                    └────────┬─────────┘     └──────────┬───────────┘
-                             │                          │
-                             ▼                          ▼
-                    ┌──────────────────────────────────────────────┐
-                    │          Gemini Model Router                 │
-                    │   ⚡ Flash (fast)  |  🧠 Pro (RAG-grounded) │
-                    └────────────────────┬─────────────────────────┘
-                                         │
-                                         ▼
-                    ┌──────────────────────────────────────────────┐
-                    │         Streamlit Dashboard (Cloud Run)      │
-                    │   📊 Risk Charts  | 🕸️ Graph Rings           │
-                    │   🚨 Alerts       | 💬 AI Chat (Sim Fallback)│
-                    └──────────────────────────────────────────────┘
+└─────────────────┘     └───────┬──────┘     └──────────┬──────────┘
+                                │                         │
+                                ▼                         ▼
+                     ┌──────────────────┐     ┌──────────────────────┐
+                     │  BigQuery Vector │     │  BigQuery Enriched   │
+                     │  Search (RAG)    │     │  Transactions        │
+                     └──────────┬───────┘     └──────────┬───────────┘
+                                │                          │
+                                ▼                          ▼
+                     ┌──────────────────────────────────────────────┐
+                     │          Gemini Model Router                 │
+                     │   Flash (fast)  |  Pro (RAG-grounded)        │
+                     └────────────────────┬─────────────────────────┘
+                                          │
+                                          ▼
+                     ┌──────────────────────────────────────────────┐
+                     │         Streamlit Dashboard (Cloud Run)      │
+                     │   Risk Charts  |  Graph Rings                │
+                     │   Alerts       |  AI Chat (Sim Fallback)     │
+                     └──────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Technology | Role in Elysium AI |
 |---|---|
@@ -61,8 +61,8 @@ Elysium AI is an end-to-end risk intelligence platform that:
 | **BigQuery** | Scalable data warehouse; hosts raw, enriched, and embedding tables |
 | **BigQuery ML** | Generates text embeddings (`text-embedding-004`) for RAG pipeline |
 | **BigQuery Vector Search** | Cosine similarity search over embedded knowledge base chunks |
-| **Vertex AI Gemini 2.0 Flash** | Fast inference for simple risk queries (scores, summaries) |
-| **Vertex AI Gemini 2.0 Pro** | Deep analysis with RAG-grounded context for complex queries |
+| **Vertex AI Gemini 2.5 Flash** | Fast inference for simple risk queries (scores, summaries) |
+| **Vertex AI Gemini 2.5 Pro** | Deep analysis with RAG-grounded context for complex queries |
 | **NVIDIA RAPIDS cuDF** | GPU-accelerated pandas for ETL — rolling averages, risk scoring |
 | **NetworkX** | In-memory graph modeling of bipartite transactional relations |
 | **python-louvain (Louvain)** | Community detection algorithm to partition accounts into fraud rings |
@@ -74,7 +74,7 @@ Elysium AI is an end-to-end risk intelligence platform that:
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 elysium/
@@ -110,7 +110,7 @@ elysium/
 
 ---
 
-## 🚀 Setup & Run
+## Setup and Run
 
 ### Prerequisites
 - Google Cloud project (`elysium-501518`) with APIs enabled (BigQuery, Cloud Storage, Vertex AI, Cloud Run)
@@ -209,21 +209,21 @@ gcloud run deploy elysium-ai --source . --region us-central1 --allow-unauthentic
 
 ---
 
-## 🔗 Links
+## Links
 
 | Resource | Link |
 |---|---|
-| 🌐 **Live Demo** | [DEPLOYMENT_LINK] |
-| 🎥 **Demo Video** | [DEMO_VIDEO_LINK] |
-| 📊 **Presentation** | [PPT_LINK] |
-| 💻 **GitHub** | [https://github.com/AryanMedigeri08/Elysium](https://github.com/AryanMedigeri08/Elysium) |
+| Live Demo | [DEPLOYMENT_LINK] |
+| Demo Video | [DEMO_VIDEO_LINK] |
+| Presentation | [PPT_LINK] |
+| GitHub | [https://github.com/AryanMedigeri08/Elysium](https://github.com/AryanMedigeri08/Elysium) |
 
 ---
 
-## 👤 Team Arshar
+## Team Arshar
 
 **Sakshi Sharan** **Aryan Medigeri** **Arnav Shende**
 
 ---
 
-*Built with ❤️ using Google Cloud and NVIDIA technologies*
+*Built using Google Cloud and NVIDIA technologies*
